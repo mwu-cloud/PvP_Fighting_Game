@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Lobby - Mina's PVP Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .lobby {
+            background: #1a1a2e;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        h1 {
+            color: #f39c12;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+        }
+
+        .section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section h2 {
+            color: #3498db;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        button {
+            font-size: 18px;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+
+        .create-btn {
+            background: #27ae60;
+            color: white;
+        }
+
+        .create-btn:hover {
+            background: #229954;
+            transform: translateY(-2px);
+        }
+
+        .join-btn {
+            background: #3498db;
+            color: white;
+        }
+
+        .join-btn:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        input {
+            font-size: 24px;
+            padding: 15px;
+            border: 3px solid #f39c12;
+            border-radius: 10px;
+            text-align: center;
+            width: 200px;
+            background: #2a2a4e;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+        }
+
+        input::placeholder {
+            color: #666;
+            letter-spacing: 2px;
+        }
+
+        .room-code {
+            font-size: 48px;
+            color: #f39c12;
+            font-weight: bold;
+            letter-spacing: 10px;
+            margin: 20px 0;
+            font-family: monospace;
+        }
+
+        .status {
+            color: #2ecc71;
+            font-size: 18px;
+            margin-top: 15px;
+        }
+
+        .error {
+            color: #e74c3c;
+        }
+
+        .waiting {
+            color: #f39c12;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #log {
+            background: #0a0a1a;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            text-align: left;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        .log-entry {
+            color: #888;
+            margin: 5px 0;
+        }
+
+        .log-entry.success {
+            color: #2ecc71;
+        }
+
+        .log-entry.error {
+            color: #e74c3c;
+        }
+
+        .log-entry.info {
+            color: #3498db;
+        }
+    </style>
+</head>
+<body>
+    <div class="lobby">
+        <h1>MINA'S PVP GAME</h1>
+        <p class="subtitle">Multiplayer Lobby</p>
+
+        <!-- Initial Options -->
+        <div id="options" class="section">
+            <h2>Choose an option:</h2>
+            <button class="create-btn" onclick="createRoom()">CREATE ROOM</button>
+            <br><br>
+            <p style="color: #888;">- OR -</p>
+            <br>
+            <input type="text" id="codeInput" placeholder="CODE" maxlength="6">
+            <br><br>
+            <button class="join-btn" onclick="joinRoom()">JOIN ROOM</button>
+        </div>
+
+        <!-- Waiting Room -->
+        <div id="waitingRoom" class="section hidden">
+            <h2>Your Room Code:</h2>
+            <div class="room-code" id="displayCode">------</div>
+            <p class="status waiting">Waiting for another player...</p>
+            <p style="color: #888; margin-top: 10px;">Share this code with your friend!</p>
+        </div>
+
+        <!-- Ready Room -->
+        <div id="readyRoom" class="section hidden">
+            <h2>Both Players Connected!</h2>
+            <div class="room-code" id="readyCode">------</div>
+            <p class="status success">Ready to battle!</p>
+            <button class="create-btn" onclick="playerReady()">I'M READY!</button>
+        </div>
+
+        <!-- Event Log -->
+        <div id="log">
+            <div class="log-entry info">Connecting to server...</div>
+        </div>
+    </div>
+
+    <!-- Socket.IO library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+
+    <script>
+        // Connect to the server
+        const socket = io();
+        let currentRoomCode = null;
+
+        // Helper to add log entries
+        function log(message, type = '') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            entry.textContent = '> ' + message;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // Socket event handlers
+        socket.on('connect', () => {
+            log('Connected to server!', 'success');
+        });
+
+        socket.on('connected', (data) => {
+            log(data.message, 'info');
+        });
+
+        socket.on('room_created', (data) => {
+            currentRoomCode = data.code;
+            document.getElementById('displayCode').textContent = data.code;
+            document.getElementById('options').classList.add('hidden');
+            document.getElementById('waitingRoom').classList.remove('hidden');
+            log('Room created: ' + data.code, 'success');
+            log('You are Player ' + data.player_number, 'info');
+        });
+
+        socket.on('room_joined', (data) => {
+            currentRoomCode = data.code;
+            log('Joined room: ' + data.code, 'success');
+            log('You are Player ' + data.player_number, 'info');
+        });
+
+        socket.on('join_error', (data) => {
+            log(data.message, 'error');
+        });
+
+        socket.on('room_ready', (data) => {
+            document.getElementById('options').classList.add('hidden');
+            document.getElementById('waitingRoom').classList.add('hidden');
+            document.getElementById('readyRoom').classList.remove('hidden');
+            document.getElementById('readyCode').textContent = currentRoomCode;
+            log(data.message, 'success');
+        });
+
+        socket.on('player_left', (data) => {
+            log(data.message, 'error');
+            // Go back to options
+            document.getElementById('options').classList.remove('hidden');
+            document.getElementById('waitingRoom').classList.add('hidden');
+            document.getElementById('readyRoom').classList.add('hidden');
+        });
+
+        socket.on('game_start', (data) => {
+            log('GAME STARTING! Map: ' + data.map.name, 'success');
+            log(data.message, 'success');
+            // In the full version, this would load the game!
+        });
+
+        // Button functions
+        function createRoom() {
+            log('Creating room...', 'info');
+            socket.emit('create_room');
+        }
+
+        function joinRoom() {
+            const code = document.getElementById('codeInput').value.toUpperCase();
+            if (code.length !== 6) {
+                log('Code must be 6 characters!', 'error');
+                return;
+            }
+            log('Joining room: ' + code, 'info');
+            socket.emit('join_room', { code: code });
+        }
+
+        function playerReady() {
+            log('Marked as ready!', 'info');
+            socket.emit('player_ready', { code: currentRoomCode });
+        }
+    </script>
+</body>
+</html>
