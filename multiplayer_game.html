@@ -273,12 +273,16 @@
         let myPlayer = null;
         let opponent = null;
 
-        // Simple weapon list
-        const WEAPONS = [
-            {name: 'Sword', damage: 10, type: 'melee'},
-            {name: 'Axe', damage: 12, type: 'melee'},
-            {name: 'Bow', damage: 8, type: 'ranged'}
-        ];
+        // Load weapons from localStorage (set by lobby)
+        const savedWeapons = JSON.parse(localStorage.getItem('mp_game_weapons') || '[{"name":"Sword","damage":10,"type":"melee"}]');
+        const savedAbility = localStorage.getItem('mp_game_ability') || '';
+
+        // Use first 3 weapons from inventory
+        const WEAPONS = savedWeapons.slice(0, 3);
+        // If less than 3 weapons, fill with default
+        while (WEAPONS.length < 3) {
+            WEAPONS.push({name: 'Sword', damage: 10, type: 'melee'});
+        }
 
         // Player class
         class Player {
@@ -648,12 +652,24 @@
             gameState.winner = data.winner;
 
             const winnerText = document.getElementById('winnerText');
-            winnerText.textContent = `PLAYER ${data.winner} WINS!`;
+            const iWon = data.winner === myPlayerNum;
+
+            if (iWon) {
+                winnerText.textContent = 'YOU WIN!';
+                winnerText.style.color = '#2ecc71';
+            } else {
+                winnerText.textContent = 'YOU LOSE!';
+                winnerText.style.color = '#e74c3c';
+            }
             document.getElementById('gameOver').style.display = 'block';
 
-            // Return to lobby after 3 seconds
+            // Return to lobby after 3 seconds (with reward if won)
             setTimeout(() => {
-                window.location.href = '/multiplayer';
+                if (iWon) {
+                    window.location.href = '/multiplayer?reward=100';
+                } else {
+                    window.location.href = '/multiplayer';
+                }
             }, 3000);
         });
 

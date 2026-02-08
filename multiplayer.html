@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multiplayer Lobby - Mina's PVP Game</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+
         * {
             margin: 0;
             padding: 0;
@@ -13,50 +15,64 @@
 
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'VT323', monospace;
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
+            padding: 20px;
         }
 
         .lobby {
             background: #1a1a2e;
             border-radius: 20px;
-            padding: 40px;
+            padding: 30px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.5);
             text-align: center;
-            max-width: 500px;
-            width: 90%;
+            max-width: 900px;
+            width: 100%;
         }
 
         h1 {
+            font-family: 'Press Start 2P', cursive;
             color: #f39c12;
             margin-bottom: 10px;
-            font-size: 28px;
+            font-size: 24px;
+            text-shadow: 3px 3px 0 #e67e22;
         }
 
         .subtitle {
             color: #888;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+
+        .main-content {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         .section {
             background: rgba(255,255,255,0.05);
             border-radius: 15px;
             padding: 20px;
-            margin-bottom: 20px;
+            flex: 1;
+            min-width: 280px;
         }
 
         .section h2 {
+            font-family: 'Press Start 2P', cursive;
             color: #3498db;
             margin-bottom: 15px;
-            font-size: 20px;
+            font-size: 14px;
         }
 
         button {
-            font-size: 18px;
-            padding: 15px 30px;
+            font-family: 'VT323', monospace;
+            font-size: 20px;
+            padding: 12px 24px;
             border: none;
             border-radius: 10px;
             cursor: pointer;
@@ -84,13 +100,32 @@
             transform: translateY(-2px);
         }
 
+        .store-btn {
+            background: #9b59b6;
+            color: white;
+            width: 100%;
+            margin: 5px 0;
+        }
+
+        .store-btn:hover {
+            background: #8e44ad;
+            transform: translateY(-2px);
+        }
+
+        .store-btn:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         input {
-            font-size: 24px;
-            padding: 15px;
+            font-family: 'VT323', monospace;
+            font-size: 28px;
+            padding: 12px;
             border: 3px solid #f39c12;
             border-radius: 10px;
             text-align: center;
-            width: 200px;
+            width: 180px;
             background: #2a2a4e;
             color: white;
             text-transform: uppercase;
@@ -103,30 +138,82 @@
         }
 
         .room-code {
-            font-size: 48px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 32px;
             color: #f39c12;
             font-weight: bold;
-            letter-spacing: 10px;
-            margin: 20px 0;
-            font-family: monospace;
+            letter-spacing: 8px;
+            margin: 15px 0;
         }
 
         .status {
             color: #2ecc71;
+            font-size: 20px;
+            margin-top: 10px;
+        }
+
+        .error { color: #e74c3c; }
+        .waiting { color: #f39c12; }
+        .hidden { display: none; }
+
+        /* Store styles */
+        .coins-display {
+            font-family: 'Press Start 2P', cursive;
             font-size: 18px;
-            margin-top: 15px;
-        }
-
-        .error {
-            color: #e74c3c;
-        }
-
-        .waiting {
             color: #f39c12;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 0 #e67e22;
         }
 
-        .hidden {
-            display: none;
+        .store-item {
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+
+        .store-item-name {
+            color: #fff;
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+
+        .store-item-price {
+            color: #f39c12;
+            font-size: 16px;
+        }
+
+        .store-item-desc {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .inventory-section {
+            margin-top: 15px;
+            text-align: left;
+        }
+
+        .inventory-title {
+            color: #3498db;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .inventory-item {
+            background: rgba(39, 174, 96, 0.3);
+            padding: 8px 12px;
+            border-radius: 5px;
+            margin: 5px 0;
+            color: #2ecc71;
+            font-size: 16px;
+            display: inline-block;
+            margin-right: 5px;
+        }
+
+        .ability-item {
+            background: rgba(155, 89, 182, 0.3);
+            color: #9b59b6;
         }
 
         #log {
@@ -135,10 +222,9 @@
             padding: 15px;
             margin-top: 20px;
             text-align: left;
-            max-height: 200px;
+            max-height: 150px;
             overflow-y: auto;
-            font-family: monospace;
-            font-size: 14px;
+            font-size: 16px;
         }
 
         .log-entry {
@@ -146,16 +232,17 @@
             margin: 5px 0;
         }
 
-        .log-entry.success {
-            color: #2ecc71;
+        .log-entry.success { color: #2ecc71; }
+        .log-entry.error { color: #e74c3c; }
+        .log-entry.info { color: #3498db; }
+
+        .got-item {
+            animation: flash 0.5s ease-out;
         }
 
-        .log-entry.error {
-            color: #e74c3c;
-        }
-
-        .log-entry.info {
-            color: #3498db;
+        @keyframes flash {
+            0% { background: #f39c12; }
+            100% { background: rgba(0,0,0,0.3); }
         }
     </style>
 </head>
@@ -164,32 +251,71 @@
         <h1>MINA'S PVP GAME</h1>
         <p class="subtitle">Multiplayer Lobby</p>
 
-        <!-- Initial Options -->
-        <div id="options" class="section">
-            <h2>Choose an option:</h2>
-            <button class="create-btn" onclick="createRoom()">CREATE ROOM</button>
-            <br><br>
-            <p style="color: #888;">- OR -</p>
-            <br>
-            <input type="text" id="codeInput" placeholder="CODE" maxlength="6">
-            <br><br>
-            <button class="join-btn" onclick="joinRoom()">JOIN ROOM</button>
-        </div>
+        <div class="main-content">
+            <!-- Left side: Room options -->
+            <div class="section" id="roomSection">
+                <!-- Initial Options -->
+                <div id="options">
+                    <h2>JOIN OR CREATE</h2>
+                    <button class="create-btn" onclick="createRoom()">CREATE ROOM</button>
+                    <br><br>
+                    <p style="color: #888;">- OR -</p>
+                    <br>
+                    <input type="text" id="codeInput" placeholder="CODE" maxlength="6">
+                    <br><br>
+                    <button class="join-btn" onclick="joinRoom()">JOIN ROOM</button>
+                </div>
 
-        <!-- Waiting Room -->
-        <div id="waitingRoom" class="section hidden">
-            <h2>Your Room Code:</h2>
-            <div class="room-code" id="displayCode">------</div>
-            <p class="status waiting">Waiting for another player...</p>
-            <p style="color: #888; margin-top: 10px;">Share this code with your friend!</p>
-        </div>
+                <!-- Waiting Room -->
+                <div id="waitingRoom" class="hidden">
+                    <h2>YOUR ROOM CODE</h2>
+                    <div class="room-code" id="displayCode">------</div>
+                    <p class="status waiting">Waiting for player 2...</p>
+                    <p style="color: #888; margin-top: 10px;">Share this code!</p>
+                </div>
 
-        <!-- Ready Room -->
-        <div id="readyRoom" class="section hidden">
-            <h2>Both Players Connected!</h2>
-            <div class="room-code" id="readyCode">------</div>
-            <p class="status success">Ready to battle!</p>
-            <button class="create-btn" onclick="playerReady()">I'M READY!</button>
+                <!-- Ready Room -->
+                <div id="readyRoom" class="hidden">
+                    <h2>BOTH CONNECTED!</h2>
+                    <div class="room-code" id="readyCode">------</div>
+                    <p class="status success">Ready to battle!</p>
+                    <button class="create-btn" onclick="playerReady()">I'M READY!</button>
+                </div>
+            </div>
+
+            <!-- Right side: Store -->
+            <div class="section" id="storeSection">
+                <h2>STORE</h2>
+                <div class="coins-display">COINS: <span id="coinCount">0</span></div>
+
+                <div class="store-item">
+                    <div class="store-item-name">Mystery Box</div>
+                    <div class="store-item-desc">Random weapon (any tier!)</div>
+                    <div class="store-item-price">100 coins</div>
+                    <button class="store-btn" onclick="buyMysteryBox()">BUY</button>
+                </div>
+
+                <div class="store-item">
+                    <div class="store-item-name">Random Ability</div>
+                    <div class="store-item-desc">Shield, Speed, Invisibility, or Teleport</div>
+                    <div class="store-item-price">200 coins</div>
+                    <button class="store-btn" onclick="buyAbility()">BUY</button>
+                </div>
+
+                <div class="inventory-section">
+                    <div class="inventory-title">YOUR WEAPONS:</div>
+                    <div id="weaponInventory">
+                        <span class="inventory-item">Sword (10 dmg)</span>
+                    </div>
+                </div>
+
+                <div class="inventory-section">
+                    <div class="inventory-title">YOUR ABILITY:</div>
+                    <div id="abilityInventory">
+                        <span class="inventory-item ability-item">None</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Event Log -->
@@ -206,6 +332,129 @@
         const socket = io();
         let currentRoomCode = null;
         let currentPlayerNumber = null;
+
+        // Player data (persists in localStorage)
+        let playerData = {
+            coins: parseInt(localStorage.getItem('mp_coins') || '200'), // Start with 200 coins
+            weapons: JSON.parse(localStorage.getItem('mp_weapons') || '[{"name":"Sword","damage":10,"type":"melee"}]'),
+            ability: localStorage.getItem('mp_ability') || null
+        };
+
+        // All possible weapons (by tier)
+        const WEAPONS = {
+            1: [
+                {name: "Sword", damage: 10, type: "melee"},
+                {name: "Baseball Bat", damage: 8, type: "melee"},
+                {name: "Frying Pan", damage: 7, type: "melee"},
+                {name: "Rubber Chicken", damage: 5, type: "melee"}
+            ],
+            2: [
+                {name: "Axe", damage: 12, type: "melee"},
+                {name: "Hammer", damage: 11, type: "melee"},
+                {name: "Bow", damage: 10, type: "ranged"},
+                {name: "Slingshot", damage: 8, type: "ranged"}
+            ],
+            3: [
+                {name: "Giant Lollipop", damage: 15, type: "melee"},
+                {name: "Firework Launcher", damage: 17, type: "ranged"}
+            ],
+            4: [
+                {name: "Disco Ball", damage: 20, type: "ranged"},
+                {name: "Lightsaber", damage: 22, type: "melee"},
+                {name: "Chainsaw", damage: 23, type: "melee"},
+                {name: "Bomb Thrower", damage: 24, type: "ranged"}
+            ],
+            5: [
+                {name: "Electric Guitar", damage: 32, type: "melee"},
+                {name: "Bazooka", damage: 35, type: "ranged"}
+            ]
+        };
+
+        const ABILITIES = ["Shield", "Speed", "Invisibility", "Teleport"];
+
+        // Save data to localStorage
+        function saveData() {
+            localStorage.setItem('mp_coins', playerData.coins.toString());
+            localStorage.setItem('mp_weapons', JSON.stringify(playerData.weapons));
+            if (playerData.ability) {
+                localStorage.setItem('mp_ability', playerData.ability);
+            }
+        }
+
+        // Update UI
+        function updateUI() {
+            document.getElementById('coinCount').textContent = playerData.coins;
+
+            // Update weapon inventory
+            const weaponDiv = document.getElementById('weaponInventory');
+            weaponDiv.innerHTML = playerData.weapons.map(w =>
+                `<span class="inventory-item">${w.name} (${w.damage} dmg)</span>`
+            ).join('');
+
+            // Update ability
+            const abilityDiv = document.getElementById('abilityInventory');
+            abilityDiv.innerHTML = `<span class="inventory-item ability-item">${playerData.ability || 'None'}</span>`;
+        }
+
+        // Get random weapon from mystery box
+        function getRandomWeapon() {
+            // Weighted random: lower tiers more common
+            const weights = [40, 30, 15, 10, 5]; // Tier 1-5 chances
+            const total = weights.reduce((a, b) => a + b, 0);
+            let random = Math.random() * total;
+            let tier = 1;
+
+            for (let i = 0; i < weights.length; i++) {
+                random -= weights[i];
+                if (random <= 0) {
+                    tier = i + 1;
+                    break;
+                }
+            }
+
+            const tierWeapons = WEAPONS[tier];
+            const weapon = tierWeapons[Math.floor(Math.random() * tierWeapons.length)];
+            return { ...weapon, tier };
+        }
+
+        // Buy mystery box
+        function buyMysteryBox() {
+            if (playerData.coins < 100) {
+                log('Not enough coins! Need 100.', 'error');
+                return;
+            }
+
+            playerData.coins -= 100;
+            const weapon = getRandomWeapon();
+
+            // Check if already have this weapon
+            const existing = playerData.weapons.find(w => w.name === weapon.name);
+            if (existing) {
+                log(`Got ${weapon.name} again! (Already owned)`, 'info');
+            } else {
+                playerData.weapons.push(weapon);
+                log(`NEW WEAPON: ${weapon.name}! (Tier ${weapon.tier}, ${weapon.damage} damage)`, 'success');
+            }
+
+            saveData();
+            updateUI();
+        }
+
+        // Buy ability
+        function buyAbility() {
+            if (playerData.coins < 200) {
+                log('Not enough coins! Need 200.', 'error');
+                return;
+            }
+
+            playerData.coins -= 200;
+            const ability = ABILITIES[Math.floor(Math.random() * ABILITIES.length)];
+            playerData.ability = ability;
+
+            log(`Got ability: ${ability}!`, 'success');
+            saveData();
+            updateUI();
+        }
 
         // Helper to add log entries
         function log(message, type = '') {
@@ -239,6 +488,10 @@
         socket.on('room_joined', (data) => {
             currentRoomCode = data.code;
             currentPlayerNumber = data.player_number;
+            document.getElementById('options').classList.add('hidden');
+            document.getElementById('waitingRoom').classList.add('hidden');
+            document.getElementById('readyRoom').classList.remove('hidden');
+            document.getElementById('readyCode').textContent = data.code;
             log('Joined room: ' + data.code, 'success');
             log('You are Player ' + data.player_number, 'info');
         });
@@ -266,11 +519,28 @@
         socket.on('game_start', (data) => {
             log('GAME STARTING! Map: ' + data.map.name, 'success');
             log(data.message, 'success');
+
+            // Save inventory to pass to game
+            localStorage.setItem('mp_game_weapons', JSON.stringify(playerData.weapons));
+            localStorage.setItem('mp_game_ability', playerData.ability || '');
+
             // Redirect to the multiplayer game page with room info
             const playerNum = currentPlayerNumber;
             const mapName = encodeURIComponent(data.map.name);
             window.location.href = `/multiplayer_game?room=${currentRoomCode}&player=${playerNum}&map=${mapName}`;
         });
+
+        // Check for returning from game with reward
+        const urlParams = new URLSearchParams(window.location.search);
+        const reward = urlParams.get('reward');
+        if (reward) {
+            const rewardAmount = parseInt(reward);
+            playerData.coins += rewardAmount;
+            saveData();
+            log(`You won! +${rewardAmount} coins!`, 'success');
+            // Clear the URL parameter
+            window.history.replaceState({}, document.title, '/multiplayer');
+        }
 
         // Button functions
         function createRoom() {
@@ -292,6 +562,9 @@
             log('Marked as ready!', 'info');
             socket.emit('player_ready', { code: currentRoomCode });
         }
+
+        // Initialize UI
+        updateUI();
     </script>
 </body>
 </html>
