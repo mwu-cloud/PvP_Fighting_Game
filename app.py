@@ -85,8 +85,14 @@ def home():
 
 @app.route('/multiplayer')
 def multiplayer():
-    """Multiplayer lobby page (we'll create this later)"""
+    """Multiplayer lobby page"""
     return send_from_directory('.', 'multiplayer.html')
+
+
+@app.route('/multiplayer_game')
+def multiplayer_game():
+    """Multiplayer game page - the actual battle"""
+    return send_from_directory('.', 'multiplayer_game.html')
 
 
 # =============================================================================
@@ -193,6 +199,25 @@ def handle_player_ready(data):
                 'map': room['current_map'],
                 'message': 'FIGHT!'
             }, room=code)
+
+
+@socketio.on('rejoin_game')
+def handle_rejoin_game(data):
+    """Player reconnects to game after page redirect"""
+    code = data.get('code')
+    player_num = data.get('player')
+
+    if code not in game_rooms:
+        emit('join_error', {'message': 'Room no longer exists!'})
+        return
+
+    room = game_rooms[code]
+
+    # Add the player back to the room
+    room['players'][request.sid] = create_new_player(player_num)
+    join_room(code)
+
+    print(f"Player {player_num} rejoined room {code}")
 
 
 @socketio.on('player_action')

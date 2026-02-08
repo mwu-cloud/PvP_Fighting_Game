@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Battle - Mina's PVP Game</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'VT323', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            background: #1a1a2e;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        #gameCanvas {
+            display: block;
+            border-radius: 10px;
+        }
+
+        #ui {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            right: 30px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+        }
+
+        .healthBar {
+            width: 200px;
+            height: 30px;
+            background: #333;
+            border-radius: 15px;
+            overflow: hidden;
+            border: 3px solid #fff;
+        }
+
+        .healthFill {
+            height: 100%;
+            transition: width 0.3s;
+        }
+
+        #p1Health .healthFill { background: linear-gradient(90deg, #3498db, #2980b9); }
+        #p2Health .healthFill { background: linear-gradient(90deg, #e74c3c, #c0392b); }
+
+        .playerInfo {
+            text-align: center;
+            color: white;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 12px;
+        }
+
+        .playerInfo span {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        #gameOver {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            color: white;
+            font-family: 'Press Start 2P', cursive;
+            z-index: 100;
+        }
+
+        #gameOver h2 {
+            font-size: 32px;
+            margin-bottom: 20px;
+            color: #f39c12;
+        }
+
+        #gameOver p {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #888;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        #connectionStatus {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 14px;
+            font-family: 'VT323', monospace;
+        }
+
+        .connected { background: #27ae60; color: white; }
+        .disconnected { background: #e74c3c; color: white; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="connectionStatus" class="connected">Connected</div>
+        <canvas id="gameCanvas" width="1200" height="700"></canvas>
+        <div id="ui">
+            <div class="playerInfo">
+                <span>PLAYER 1</span>
+                <div class="healthBar" id="p1Health">
+                    <div class="healthFill" style="width: 100%"></div>
+                </div>
+                <span id="p1Weapon">Sword</span>
+            </div>
+            <div class="playerInfo">
+                <span>PLAYER 2</span>
+                <div class="healthBar" id="p2Health">
+                    <div class="healthFill" style="width: 100%"></div>
+                </div>
+                <span id="p2Weapon">Sword</span>
+            </div>
+        </div>
+        <div id="gameOver">
+            <h2 id="winnerText">PLAYER 1 WINS!</h2>
+            <p>Returning to lobby...</p>
+        </div>
+        <div id="controls">
+            WASD or Arrow Keys to move | S or Down to attack | Space or Enter for ability | 1-2-3 switch weapons
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        // Get room info from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomCode = urlParams.get('room');
+        const myPlayerNum = parseInt(urlParams.get('player'));
+        const mapName = urlParams.get('map') || 'Normal';
+
+        if (!roomCode || !myPlayerNum) {
+            alert('Invalid game session! Returning to lobby.');
+            window.location.href = '/multiplayer';
+        }
+
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Connect to server
+        const socket = io();
+
+        // Game constants
+        const GRAVITY = 0.8;
+        const JUMP_STRENGTH = -15;
+        const PLAYER_SPEED = 5;
+        const PLAYER_WIDTH = 40;
+        const PLAYER_HEIGHT = 60;
+
+        // Keyboard state
+        const keys = {};
+
+        // Helper: Check if any key in an array is pressed
+        function isKeyPressed(control) {
+            if (Array.isArray(control)) {
+                return control.some(key => keys[key]);
+            }
+            return keys[control];
+        }
+
+        // Maps data
+        const MAPS = {
+            'Normal': {
+                platforms: [
+                    {x: 0, y: 650, width: 1200, height: 50},
+                    {x: 200, y: 550, width: 200, height: 20},
+                    {x: 800, y: 550, width: 200, height: 20},
+                    {x: 100, y: 430, width: 150, height: 20},
+                    {x: 500, y: 400, width: 200, height: 20},
+                    {x: 950, y: 430, width: 150, height: 20},
+                    {x: 500, y: 250, width: 200, height: 20},
+                ],
+                hazards: []
+            },
+            'Comet Field': {
+                platforms: [
+                    {x: 0, y: 650, width: 1200, height: 50},
+                    {x: 150, y: 520, width: 180, height: 20},
+                    {x: 870, y: 520, width: 180, height: 20},
+                    {x: 450, y: 450, width: 300, height: 20},
+                    {x: 200, y: 320, width: 150, height: 20},
+                    {x: 850, y: 320, width: 150, height: 20},
+                    {x: 500, y: 200, width: 200, height: 20},
+                ],
+                hazards: ['comet']
+            },
+            'Volcano': {
+                platforms: [
+                    {x: 0, y: 650, width: 1200, height: 50},
+                    {x: 100, y: 550, width: 200, height: 20},
+                    {x: 900, y: 550, width: 200, height: 20},
+                    {x: 400, y: 480, width: 400, height: 20},
+                    {x: 150, y: 380, width: 180, height: 20},
+                    {x: 870, y: 380, width: 180, height: 20},
+                    {x: 450, y: 280, width: 300, height: 20},
+                    {x: 500, y: 150, width: 200, height: 20},
+                ],
+                hazards: ['lava']
+            },
+            'Ice': {
+                platforms: [
+                    {x: 0, y: 650, width: 1200, height: 50},
+                    {x: 100, y: 530, width: 200, height: 20},
+                    {x: 900, y: 530, width: 200, height: 20},
+                    {x: 350, y: 450, width: 150, height: 20},
+                    {x: 700, y: 450, width: 150, height: 20},
+                    {x: 500, y: 200, width: 200, height: 20},
+                ],
+                hazards: ['icicle', 'slippery']
+            },
+            'Alien Invasion': {
+                platforms: [
+                    {x: 0, y: 650, width: 450, height: 50},
+                    {x: 750, y: 650, width: 450, height: 50},
+                    {x: 50, y: 520, width: 180, height: 20},
+                    {x: 970, y: 520, width: 180, height: 20},
+                    {x: 250, y: 400, width: 150, height: 20},
+                    {x: 800, y: 400, width: 150, height: 20},
+                    {x: 500, y: 300, width: 200, height: 20},
+                ],
+                hazards: ['spaceship', 'crater']
+            }
+        };
+
+        const currentMap = MAPS[mapName] || MAPS['Normal'];
+
+        // Game state
+        let gameState = {
+            gameOver: false,
+            winner: null,
+            lavaHeight: 50,
+            comets: [],
+            icicles: [],
+            projectiles: []
+        };
+
+        // Players
+        let myPlayer = null;
+        let opponent = null;
+
+        // Simple weapon list
+        const WEAPONS = [
+            {name: 'Sword', damage: 10, type: 'melee'},
+            {name: 'Axe', damage: 12, type: 'melee'},
+            {name: 'Bow', damage: 8, type: 'ranged'}
+        ];
+
+        // Player class
+        class Player {
+            constructor(x, y, color, name, playerNum) {
+                this.x = x;
+                this.y = y;
+                this.width = PLAYER_WIDTH;
+                this.height = PLAYER_HEIGHT;
+                this.color = color;
+                this.name = name;
+                this.playerNum = playerNum;
+                this.velX = 0;
+                this.velY = 0;
+                this.hp = 100;
+                this.maxHp = 100;
+                this.onGround = false;
+                this.facingRight = playerNum === 1;
+                this.weapons = [WEAPONS[0], WEAPONS[1], WEAPONS[2]];
+                this.currentWeapon = 0;
+                this.attackCooldown = 0;
+                this.isAttacking = false;
+                this.attackFrame = 0;
+                this.controls = {
+                    left: ['a', 'ArrowLeft'],
+                    right: ['d', 'ArrowRight'],
+                    jump: ['w', 'ArrowUp'],
+                    attack: ['s', 'ArrowDown']
+                };
+            }
+
+            update() {
+                // Only control your own player
+                if (this.playerNum === myPlayerNum) {
+                    this.velX = 0;
+
+                    if (isKeyPressed(this.controls.left)) {
+                        this.velX = -PLAYER_SPEED;
+                        this.facingRight = false;
+                    }
+                    if (isKeyPressed(this.controls.right)) {
+                        this.velX = PLAYER_SPEED;
+                        this.facingRight = true;
+                    }
+                    if (isKeyPressed(this.controls.jump) && this.onGround) {
+                        this.velY = JUMP_STRENGTH;
+                        this.onGround = false;
+                    }
+                }
+
+                // Physics
+                this.velY += GRAVITY;
+                this.x += this.velX;
+                this.y += this.velY;
+
+                // Platform collision
+                this.onGround = false;
+                for (let plat of currentMap.platforms) {
+                    if (this.x + this.width > plat.x &&
+                        this.x < plat.x + plat.width &&
+                        this.y + this.height > plat.y &&
+                        this.y + this.height < plat.y + plat.height + 20 &&
+                        this.velY >= 0) {
+                        this.y = plat.y - this.height;
+                        this.velY = 0;
+                        this.onGround = true;
+                    }
+                }
+
+                // Boundaries
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+                if (this.y + this.height > canvas.height) {
+                    this.y = canvas.height - this.height;
+                    this.onGround = true;
+                    this.velY = 0;
+                }
+
+                // Attack cooldown
+                if (this.attackCooldown > 0) this.attackCooldown--;
+                if (this.isAttacking) {
+                    this.attackFrame++;
+                    if (this.attackFrame > 15) {
+                        this.isAttacking = false;
+                        this.attackFrame = 0;
+                    }
+                }
+            }
+
+            attack() {
+                if (this.attackCooldown > 0) return null;
+                this.attackCooldown = 30;
+                this.isAttacking = true;
+                this.attackFrame = 0;
+                return this.weapons[this.currentWeapon];
+            }
+
+            switchWeapon(index) {
+                if (index >= 0 && index < this.weapons.length) {
+                    this.currentWeapon = index;
+                }
+            }
+
+            takeDamage(amount) {
+                this.hp -= amount;
+                if (this.hp < 0) this.hp = 0;
+            }
+
+            draw() {
+                ctx.save();
+
+                // Body
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+
+                // Face direction indicator
+                ctx.fillStyle = '#fff';
+                const eyeX = this.facingRight ? this.x + 25 : this.x + 10;
+                ctx.fillRect(eyeX, this.y + 15, 8, 8);
+
+                // Attack animation
+                if (this.isAttacking) {
+                    ctx.fillStyle = '#ff0';
+                    const weaponX = this.facingRight ? this.x + this.width : this.x - 30;
+                    ctx.fillRect(weaponX, this.y + 20, 30, 10);
+                }
+
+                // Name tag
+                ctx.fillStyle = '#fff';
+                ctx.font = '14px VT323';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.name, this.x + this.width/2, this.y - 10);
+
+                ctx.restore();
+            }
+
+            getState() {
+                return {
+                    x: this.x,
+                    y: this.y,
+                    velX: this.velX,
+                    velY: this.velY,
+                    hp: this.hp,
+                    facingRight: this.facingRight,
+                    isAttacking: this.isAttacking,
+                    currentWeapon: this.currentWeapon
+                };
+            }
+
+            setState(state) {
+                this.x = state.x;
+                this.y = state.y;
+                this.velX = state.velX;
+                this.velY = state.velY;
+                this.hp = state.hp;
+                this.facingRight = state.facingRight;
+                this.isAttacking = state.isAttacking;
+                this.currentWeapon = state.currentWeapon;
+            }
+        }
+
+        // Projectile class
+        class Projectile {
+            constructor(x, y, dir, damage, color) {
+                this.x = x;
+                this.y = y;
+                this.dir = dir;
+                this.speed = 12;
+                this.damage = damage;
+                this.color = color;
+                this.width = 20;
+                this.height = 8;
+                this.active = true;
+            }
+
+            update() {
+                this.x += this.dir * this.speed;
+                if (this.x < -50 || this.x > canvas.width + 50) {
+                    this.active = false;
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+        }
+
+        // Initialize players
+        function initGame() {
+            const p1Color = '#3498db';
+            const p2Color = '#e74c3c';
+
+            if (myPlayerNum === 1) {
+                myPlayer = new Player(100, 500, p1Color, 'Player 1', 1);
+                opponent = new Player(1000, 500, p2Color, 'Player 2', 2);
+            } else {
+                myPlayer = new Player(1000, 500, p2Color, 'Player 2', 2);
+                opponent = new Player(100, 500, p1Color, 'Player 1', 1);
+            }
+        }
+
+        // Draw platforms
+        function drawPlatforms() {
+            ctx.fillStyle = '#8B4513';
+            for (let plat of currentMap.platforms) {
+                ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+                ctx.strokeStyle = '#654321';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(plat.x, plat.y, plat.width, plat.height);
+            }
+        }
+
+        // Draw background
+        function drawBackground() {
+            // Sky gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#1a1a2e');
+            gradient.addColorStop(1, '#16213e');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Map name
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.font = '24px VT323';
+            ctx.textAlign = 'center';
+            ctx.fillText(mapName, canvas.width/2, 30);
+        }
+
+        // Update UI
+        function updateUI() {
+            const p1 = myPlayerNum === 1 ? myPlayer : opponent;
+            const p2 = myPlayerNum === 2 ? myPlayer : opponent;
+
+            document.querySelector('#p1Health .healthFill').style.width = (p1.hp / p1.maxHp * 100) + '%';
+            document.querySelector('#p2Health .healthFill').style.width = (p2.hp / p2.maxHp * 100) + '%';
+            document.getElementById('p1Weapon').textContent = p1.weapons[p1.currentWeapon].name;
+            document.getElementById('p2Weapon').textContent = p2.weapons[p2.currentWeapon].name;
+        }
+
+        // Check attack collision
+        function checkAttackCollision() {
+            if (myPlayer.isAttacking && myPlayer.attackFrame === 5) {
+                const weapon = myPlayer.weapons[myPlayer.currentWeapon];
+                const attackRange = 60;
+
+                let hitX, hitWidth;
+                if (myPlayer.facingRight) {
+                    hitX = myPlayer.x + myPlayer.width;
+                    hitWidth = attackRange;
+                } else {
+                    hitX = myPlayer.x - attackRange;
+                    hitWidth = attackRange;
+                }
+
+                // Check if opponent is in range
+                if (opponent.x + opponent.width > hitX &&
+                    opponent.x < hitX + hitWidth &&
+                    opponent.y + opponent.height > myPlayer.y &&
+                    opponent.y < myPlayer.y + myPlayer.height) {
+
+                    // Send damage to server
+                    socket.emit('player_action', {
+                        code: roomCode,
+                        action: 'damage',
+                        action_data: {
+                            damage: weapon.damage,
+                            targetPlayer: opponent.playerNum
+                        }
+                    });
+                }
+            }
+        }
+
+        // Game loop
+        let lastSendTime = 0;
+        function gameLoop() {
+            if (gameState.gameOver) return;
+
+            // Clear
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw
+            drawBackground();
+            drawPlatforms();
+
+            // Update my player
+            myPlayer.update();
+
+            // Check attacks
+            checkAttackCollision();
+
+            // Draw players
+            const p1 = myPlayerNum === 1 ? myPlayer : opponent;
+            const p2 = myPlayerNum === 2 ? myPlayer : opponent;
+            p1.draw();
+            p2.draw();
+
+            // Draw projectiles
+            for (let proj of gameState.projectiles) {
+                proj.update();
+                proj.draw();
+            }
+            gameState.projectiles = gameState.projectiles.filter(p => p.active);
+
+            // Update UI
+            updateUI();
+
+            // Send position to server (throttled to 20 times per second)
+            const now = Date.now();
+            if (now - lastSendTime > 50) {
+                socket.emit('player_action', {
+                    code: roomCode,
+                    action: 'move',
+                    action_data: myPlayer.getState()
+                });
+                lastSendTime = now;
+            }
+
+            // Check win condition
+            if (opponent.hp <= 0 && !gameState.gameOver) {
+                gameState.gameOver = true;
+                gameState.winner = myPlayerNum;
+                socket.emit('game_over', {
+                    code: roomCode,
+                    winner: myPlayerNum
+                });
+            }
+
+            if (myPlayer.hp <= 0 && !gameState.gameOver) {
+                gameState.gameOver = true;
+                gameState.winner = opponent.playerNum;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Socket events
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            document.getElementById('connectionStatus').className = 'connected';
+            document.getElementById('connectionStatus').textContent = 'Connected';
+
+            // Rejoin the room
+            socket.emit('rejoin_game', { code: roomCode, player: myPlayerNum });
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('connectionStatus').className = 'disconnected';
+            document.getElementById('connectionStatus').textContent = 'Disconnected';
+        });
+
+        socket.on('opponent_action', (data) => {
+            if (data.action === 'move') {
+                opponent.setState(data.data);
+            } else if (data.action === 'damage') {
+                if (data.data.targetPlayer === myPlayerNum) {
+                    myPlayer.takeDamage(data.data.damage);
+                }
+            } else if (data.action === 'attack') {
+                opponent.isAttacking = true;
+                opponent.attackFrame = 0;
+            }
+        });
+
+        socket.on('battle_result', (data) => {
+            gameState.gameOver = true;
+            gameState.winner = data.winner;
+
+            const winnerText = document.getElementById('winnerText');
+            winnerText.textContent = `PLAYER ${data.winner} WINS!`;
+            document.getElementById('gameOver').style.display = 'block';
+
+            // Return to lobby after 3 seconds
+            setTimeout(() => {
+                window.location.href = '/multiplayer';
+            }, 3000);
+        });
+
+        socket.on('player_left', (data) => {
+            alert('Opponent disconnected!');
+            window.location.href = '/multiplayer';
+        });
+
+        // Keyboard events
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+
+            // Weapon switching
+            if (e.key === '1') myPlayer.switchWeapon(0);
+            if (e.key === '2') myPlayer.switchWeapon(1);
+            if (e.key === '3') myPlayer.switchWeapon(2);
+
+            // Attack
+            if (e.key === 's' || e.key === 'ArrowDown') {
+                const weapon = myPlayer.attack();
+                if (weapon) {
+                    socket.emit('player_action', {
+                        code: roomCode,
+                        action: 'attack',
+                        action_data: { weapon: weapon.name }
+                    });
+
+                    // Ranged weapon projectile
+                    if (weapon.type === 'ranged') {
+                        const dir = myPlayer.facingRight ? 1 : -1;
+                        const projX = myPlayer.facingRight ? myPlayer.x + myPlayer.width : myPlayer.x - 20;
+                        gameState.projectiles.push(
+                            new Projectile(projX, myPlayer.y + myPlayer.height/2, dir, weapon.damage, '#FFA500')
+                        );
+                    }
+                }
+            }
+
+            // Prevent scrolling
+            if (['ArrowUp', 'ArrowDown', ' '].includes(e.key)) {
+                e.preventDefault();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Start game
+        initGame();
+        gameLoop();
+    </script>
+</body>
+</html>
