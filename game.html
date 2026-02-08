@@ -506,7 +506,15 @@
         
         // Keyboard state
         const keys = {};
-        
+
+        // Helper: Check if any key in an array (or single key) is pressed
+        function isKeyPressed(control) {
+            if (Array.isArray(control)) {
+                return control.some(key => keys[key]);
+            }
+            return keys[control];
+        }
+
         // Platform class
         class Platform {
             constructor(x, y, width, height, color = '#8B4513') {
@@ -1164,12 +1172,12 @@
                     // Can still move horizontally slowly
                     this.velX = 0;
                     const speed = (this.hasSpeed() ? PLAYER_SPEED * 2 : PLAYER_SPEED) * 0.5;
-                    if (keys[this.controls.left]) {
+                    if (isKeyPressed(this.controls.left)) {
                         this.velX = -speed;
                         this.facingRight = false;
                         this.isBeamed = false; // Exit beam when moving
                     }
-                    if (keys[this.controls.right]) {
+                    if (isKeyPressed(this.controls.right)) {
                         this.velX = speed;
                         this.facingRight = true;
                         this.isBeamed = false; // Exit beam when moving
@@ -1192,14 +1200,14 @@
                 const speed = this.hasSpeed() ? PLAYER_SPEED * 2 : PLAYER_SPEED;
                 const isIce = gameState.currentMap === 'ice';
                 
-                if (keys[this.controls.left]) {
+                if (isKeyPressed(this.controls.left)) {
                     this.velX = -speed;
                     this.facingRight = false;
                     if (isIce && this.onGround) {
                         this.slideVel = -speed * 0.6; // Set slide velocity
                     }
                 }
-                if (keys[this.controls.right]) {
+                if (isKeyPressed(this.controls.right)) {
                     this.velX = speed;
                     this.facingRight = true;
                     if (isIce && this.onGround) {
@@ -1218,7 +1226,7 @@
                     this.slideVel = 0;
                 }
                 
-                if (keys[this.controls.jump] && this.onGround) {
+                if (isKeyPressed(this.controls.jump) && this.onGround) {
                     this.velY = JUMP_STRENGTH;
                     this.onGround = false;
                 }
@@ -1995,14 +2003,15 @@
             }
             
             // Create players with selected weapons
+            // Both players can use WASD OR Arrow keys, and 1-2-3 for weapons
             player1 = new Player(100, 100, playerData.p1.color, 'Player 1', {
-                left: 'a', right: 'd', jump: 'w', attack: 's',
+                left: ['a', 'ArrowLeft'], right: ['d', 'ArrowRight'], jump: ['w', 'ArrowUp'], attack: ['s', 'ArrowDown'],
                 weapon1: '1', weapon2: '2', weapon3: '3'
             });
-            
+
             player2 = new Player(1000, 100, playerData.p2.color, 'Player 2', {
-                left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', attack: 'ArrowDown',
-                weapon1: '4', weapon2: '5', weapon3: '6'
+                left: ['a', 'ArrowLeft'], right: ['d', 'ArrowRight'], jump: ['w', 'ArrowUp'], attack: ['s', 'ArrowDown'],
+                weapon1: '1', weapon2: '2', weapon3: '3'
             });
             
             // Assign selected weapons
@@ -2642,28 +2651,29 @@
                 }
             }
             
-            // Weapon switching
-            if (player1 && e.key === '1') player1.switchWeapon(0);
-            if (player1 && e.key === '2') player1.switchWeapon(1);
-            if (player1 && e.key === '3') player1.switchWeapon(2);
-            if (player2 && e.key === '4') player2.switchWeapon(0);
-            if (player2 && e.key === '5') player2.switchWeapon(1);
-            if (player2 && e.key === '6') player2.switchWeapon(2);
+            // Weapon switching - both players use 1, 2, 3
+            if (e.key === '1') {
+                if (player1) player1.switchWeapon(0);
+                if (player2) player2.switchWeapon(0);
+            }
+            if (e.key === '2') {
+                if (player1) player1.switchWeapon(1);
+                if (player2) player2.switchWeapon(1);
+            }
+            if (e.key === '3') {
+                if (player1) player1.switchWeapon(2);
+                if (player2) player2.switchWeapon(2);
+            }
             
-            // Abilities
-            if (e.key === ' ' && player1) {
-                if (player1.activateAbility()) {
+            // Abilities - Space or Enter activates both players' abilities
+            if (e.key === ' ' || e.key === 'Enter') {
+                if (player1 && player1.activateAbility()) {
                     if (player1.ability === 'teleport') {
-                        // Teleport to random safe location
                         player1.x = 200 + Math.random() * (canvas.width - 400);
                         player1.y = 200;
                     }
                 }
-                e.preventDefault(); // Prevent page scroll
-            }
-            
-            if (e.key === 'Enter' && player2) {
-                if (player2.activateAbility()) {
+                if (player2 && player2.activateAbility()) {
                     if (player2.ability === 'teleport') {
                         player2.x = 200 + Math.random() * (canvas.width - 400);
                         player2.y = 200;
@@ -2671,27 +2681,28 @@
                 }
                 e.preventDefault();
             }
-            
-            // Attack
-            if (e.key === 's' && player1) {
-                const weapon = player1.attack();
-                if (weapon && weapon.type === 'ranged') {
-                    const dir = player1.facingRight ? 1 : -1;
-                    const projX = player1.facingRight ? player1.x + player1.width : player1.x;
-                    gameState.projectiles.push(
-                        new Projectile(projX, player1.y + player1.height/2, dir, weapon.damage, '#FFA500')
-                    );
+
+            // Attack - S or ArrowDown attacks for both players
+            if (e.key === 's' || e.key === 'ArrowDown') {
+                if (player1) {
+                    const weapon = player1.attack();
+                    if (weapon && weapon.type === 'ranged') {
+                        const dir = player1.facingRight ? 1 : -1;
+                        const projX = player1.facingRight ? player1.x + player1.width : player1.x;
+                        gameState.projectiles.push(
+                            new Projectile(projX, player1.y + player1.height/2, dir, weapon.damage, '#FFA500')
+                        );
+                    }
                 }
-            }
-            
-            if (e.key === 'ArrowDown' && player2) {
-                const weapon = player2.attack();
-                if (weapon && weapon.type === 'ranged') {
-                    const dir = player2.facingRight ? 1 : -1;
-                    const projX = player2.facingRight ? player2.x + player2.width : player2.x;
-                    gameState.projectiles.push(
-                        new Projectile(projX, player2.y + player2.height/2, dir, weapon.damage, '#FFD700')
-                    );
+                if (player2) {
+                    const weapon = player2.attack();
+                    if (weapon && weapon.type === 'ranged') {
+                        const dir = player2.facingRight ? 1 : -1;
+                        const projX = player2.facingRight ? player2.x + player2.width : player2.x;
+                        gameState.projectiles.push(
+                            new Projectile(projX, player2.y + player2.height/2, dir, weapon.damage, '#FFD700')
+                        );
+                    }
                 }
             }
         });
