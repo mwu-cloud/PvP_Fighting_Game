@@ -142,7 +142,7 @@ def handle_create_room():
     })
 
 
-@socketio.on('join_room')
+@socketio.on('join_game_room')
 def handle_join_room(data):
     """Player wants to join an existing room with a CODE"""
     code = data.get('code', '').upper()
