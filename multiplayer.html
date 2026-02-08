@@ -329,7 +329,10 @@
 
     <script>
         // Connect to the server
-        const socket = io();
+        const socket = io({
+            transports: ['websocket', 'polling'],
+            upgrade: true
+        });
         let currentRoomCode = null;
         let currentPlayerNumber = null;
 
@@ -498,6 +501,14 @@
 
         socket.on('join_error', (data) => {
             log(data.message, 'error');
+        });
+
+        socket.on('connect_error', (error) => {
+            log('Connection error: ' + error.message, 'error');
+        });
+
+        socket.on('disconnect', (reason) => {
+            log('Disconnected: ' + reason, 'error');
         });
 
         socket.on('room_ready', (data) => {
