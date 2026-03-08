@@ -85,12 +85,14 @@ def home():
 
 
 @app.route('/multiplayer')
+@app.route('/multiplayer.html')
 def multiplayer():
     """Multiplayer lobby page"""
     return send_from_directory('.', 'multiplayer.html')
 
 
 @app.route('/multiplayer_game')
+@app.route('/multiplayer_game.html')
 def multiplayer_game():
     """Multiplayer game page - the actual battle"""
     return send_from_directory('.', 'multiplayer_game.html')

@@ -507,7 +507,7 @@
         
         // Keyboard state
         const keys = {};
-
+        
         // Platform class
         class Platform {
             constructor(x, y, width, height, color = '#8B4513') {
@@ -668,11 +668,11 @@
                 this.reformTimer = 0; // Counts up to 60 when broken
                 this.isBeingSteppedOn = false;
             }
-
+            
             update(player1, player2) {
                 // Check if any player is standing on this cube
                 this.isBeingSteppedOn = false;
-
+                
                 if (!this.isBroken) {
                     // Check if player1 is on this cube
                     if (this.checkPlayerOn(player1)) {
@@ -682,7 +682,7 @@
                     if (this.checkPlayerOn(player2)) {
                         this.isBeingSteppedOn = true;
                     }
-
+                    
                     // Increment break timer if being stepped on
                     if (this.isBeingSteppedOn) {
                         this.breakTimer++;
@@ -704,7 +704,7 @@
                     }
                 }
             }
-
+            
             checkPlayerOn(player) {
                 // Check if player is standing on top of this cube
                 if (player.velY >= 0) { // Player is falling or standing
@@ -716,10 +716,10 @@
                 }
                 return false;
             }
-
+            
             checkCollision(player) {
                 if (this.isBroken) return false; // No collision if broken
-
+                
                 // Check if player is falling down
                 if (player.velY >= 0) {
                     // Check horizontal overlap
@@ -736,13 +736,13 @@
                 }
                 return false;
             }
-
+            
             draw() {
                 if (this.isBroken) return; // Don't draw if broken
-
+                
                 // Calculate flash intensity based on break timer
                 const flashIntensity = this.breakTimer / 60; // 0 to 1
-
+                
                 // Cube color - flashes from brown to red as it breaks
                 if (this.isBeingSteppedOn && this.breakTimer > 0) {
                     // Flash effect - alternate between colors
@@ -755,14 +755,14 @@
                 } else {
                     ctx.fillStyle = '#8B4513'; // Brown
                 }
-
+                
                 ctx.fillRect(this.x, this.y, this.size, this.size);
-
+                
                 // Cube outline
                 ctx.strokeStyle = '#654321';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(this.x, this.y, this.size, this.size);
-
+                
                 // 3D effect
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
                 ctx.lineWidth = 1;
@@ -774,7 +774,7 @@
                 ctx.stroke();
             }
         }
-
+        
         // Spaceship class
         class Spaceship {
             constructor(x, y, beamHeight) {
@@ -1245,7 +1245,7 @@
                 this.isAttacking = false;
                 this.attackTimer = 0;
                 this.hasHitThisAttack = false; // Track if we've hit during this attack
-
+                
                 // Abilities
                 this.ability = null;
                 this.abilityActive = false;
@@ -1254,13 +1254,7 @@
                 
                 // Ice sliding
                 this.slideVel = 0;
-
-                // Ice special moves
-                this.isSpinJumping = false;  // Currently doing a spin jump
-                this.spinAngle = 0;          // Current rotation angle (0 → 6π = 3 full spins)
-                this.isDucking = false;      // Currently duck-sliding
-                this.duckSlideVel = 0;       // Velocity of the duck slide
-
+                
                 // Alien beam
                 this.isBeamed = false;
                 this.beamTargetY = 0;
@@ -1332,7 +1326,7 @@
                         this.slideVel = speed * 2.0; // INSANELY slippery
                     }
                 }
-
+                
                 // Apply slide on ice
                 if (isIce && this.onGround && this.velX === 0 && this.slideVel !== 0) {
                     this.x += this.slideVel;
@@ -1344,39 +1338,13 @@
                     this.slideVel = 0;
                 }
                 
-                if (keys[this.controls.jump] && this.onGround && !this.isDucking) {
+                if (keys[this.controls.jump] && this.onGround) {
                     this.velY = JUMP_STRENGTH;
                     this.onGround = false;
-                    // Ice special: spin jump!
-                    if (isIce) {
-                        this.isSpinJumping = true;
-                        this.spinAngle = 0;
-                    }
                 }
-
-                // Advance spin angle while in the air
-                if (this.isSpinJumping) {
-                    // 3 full rotations (6π) spread over ~40 frames (a typical jump arc)
-                    this.spinAngle += (Math.PI * 6) / 40;
-                    // Stop spinning once we land
-                    if (this.onGround) {
-                        this.isSpinJumping = false;
-                        this.spinAngle = 0;
-                    }
-                }
-
-                // Duck slide physics (ice only)
-                if (this.isDucking) {
-                    this.x += this.duckSlideVel;
-                    this.duckSlideVel *= 0.96; // Slows down but stays fast for a while
-                    if (Math.abs(this.duckSlideVel) < 0.5 || !this.onGround) {
-                        this.isDucking = false;
-                        this.duckSlideVel = 0;
-                    }
-                }
-
+                
                 this.velY += GRAVITY;
-
+                
                 this.x += this.velX;
                 this.y += this.velY;
                 
@@ -1387,7 +1355,7 @@
                         this.onGround = true;
                     }
                 }
-
+                
                 // Breakable cube collision (only on breakable_cubes map)
                 if (gameState.currentMap === 'breakable_cubes') {
                     for (let cube of gameState.breakableCubes) {
@@ -1396,7 +1364,7 @@
                         }
                     }
                 }
-
+                
                 // Ground collision
                 if (this.y + this.height >= canvas.height - 50) {
                     this.y = canvas.height - 50 - this.height;
@@ -1427,20 +1395,20 @@
                     this.isAttacking = true;
                     this.attackTimer = 15;
                     this.attackCooldown = 60;
-
+                    
                     const weapon = this.getCurrentWeapon();
-
+                    
                     // Attack recoil - pushes player back based on weapon damage
                     if (weapon && this.onGround) {
                         const isIce = gameState.currentMap === 'ice';
                         const recoilMultiplier = isIce ? 0.3 : 0.15; // More recoil on ice
                         const recoilForce = weapon.damage * recoilMultiplier;
                         const recoilDirection = this.facingRight ? -1 : 1;
-
+                        
                         // Apply recoil
                         this.slideVel = recoilDirection * recoilForce;
                     }
-
+                    
                     return weapon;
                 }
                 return null;
@@ -1452,7 +1420,6 @@
                     this.attackTimer--;
                 } else {
                     this.isAttacking = false;
-                    this.hasHitThisAttack = false; // Reset for next attack
                 }
                 
                 // Ability timers
@@ -1505,104 +1472,73 @@
             draw() {
                 // Don't draw if invisible
                 if (this.isInvisible()) {
+                    // Draw faint outline only
                     ctx.globalAlpha = 0.2;
                 }
-
-                const cx = this.x + this.width / 2;
-                const cy = this.y + this.height / 2;
-
-                // Spin jump: rotate the whole character around its center
-                if (this.isSpinJumping) {
-                    ctx.save();
-                    ctx.translate(cx, cy);
-                    ctx.rotate(this.spinAngle);
-                    ctx.translate(-cx, -cy);
-                }
-
-                // Draw body
+                
+                // Draw body (oval)
                 ctx.fillStyle = this.color;
-                if (this.isDucking) {
-                    // Duck crouch: squished wide oval near feet, tucked head
-                    ctx.beginPath();
-                    ctx.ellipse(cx, this.y + this.height - 15, this.width / 2 + 8, 15, 0, 0, Math.PI * 2);
-                    ctx.fill();
-                    // Tucked head
-                    ctx.beginPath();
-                    ctx.arc(cx, this.y + this.height - 32, 12, 0, Math.PI * 2);
-                    ctx.fill();
-                    // Eye (still shows facing direction)
-                    ctx.fillStyle = 'black';
-                    const duckEyeX = this.facingRight ? cx + 4 : cx - 4;
-                    ctx.beginPath();
-                    ctx.arc(duckEyeX, this.y + this.height - 35, 2, 0, Math.PI * 2);
-                    ctx.fill();
-                } else {
-                    // Normal body (oval)
-                    ctx.beginPath();
-                    ctx.ellipse(cx, cy + 5, this.width / 2, this.height / 2 - 5, 0, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    // Normal head
-                    ctx.beginPath();
-                    ctx.arc(cx, this.y + 15, 12, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    // Eye
-                    ctx.fillStyle = 'black';
-                    const eyeX = this.facingRight ? cx + 4 : cx - 4;
-                    ctx.beginPath();
-                    ctx.arc(eyeX, this.y + 12, 2, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-
+                ctx.beginPath();
+                ctx.ellipse(this.x + this.width/2, this.y + this.height/2 + 5, 
+                           this.width/2, this.height/2 - 5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Draw head
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2, this.y + 15, 12, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Draw eye
+                ctx.fillStyle = 'black';
+                const eyeX = this.facingRight ? this.x + this.width/2 + 4 : this.x + this.width/2 - 4;
+                ctx.beginPath();
+                ctx.arc(eyeX, this.y + 12, 2, 0, Math.PI * 2);
+                ctx.fill();
+                
                 ctx.globalAlpha = 1.0;
-
+                
                 // Draw shield effect
                 if (this.hasShield()) {
                     ctx.strokeStyle = 'rgba(100, 200, 255, 0.5)';
                     ctx.lineWidth = 3;
                     ctx.beginPath();
-                    ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+                    ctx.arc(this.x + this.width/2, this.y + this.height/2, 40, 0, Math.PI * 2);
                     ctx.stroke();
                 }
-
-                // Draw weapon (skip while ducking — tucked away!)
-                if (!this.isDucking) {
-                    this.drawWeapon();
-                }
-
-                // Restore canvas transform after spin
-                if (this.isSpinJumping) {
-                    ctx.restore();
-                }
-
-                // Draw health bar (always drawn in world space, not rotated)
+                
+                // Draw weapon
+                this.drawWeapon();
+                
+                // Draw health bar
                 const barWidth = 50;
                 const barHeight = 5;
                 const barX = this.x - 5;
                 const barY = this.y - 15;
-
+                
                 ctx.fillStyle = 'red';
                 ctx.fillRect(barX, barY, barWidth, barHeight);
-
+                
                 ctx.fillStyle = 'green';
                 const healthWidth = (this.health / this.maxHealth) * barWidth;
                 ctx.fillRect(barX, barY, healthWidth, barHeight);
-
+                
                 // Draw ability cooldown indicator
                 if (this.ability) {
                     const abilityBarY = this.y - 25;
                     const maxCooldown = this.ability === 'teleport' ? 120 : 600;
-
+                    
                     if (this.abilityActive) {
+                        // Show ability duration
                         ctx.fillStyle = 'rgba(255, 215, 0, 0.5)';
                         const durationWidth = (this.abilityDuration / 600) * barWidth;
                         ctx.fillRect(barX, abilityBarY, durationWidth, 3);
                     } else if (this.abilityCooldown > 0) {
+                        // Show cooldown
                         ctx.fillStyle = 'rgba(128, 128, 128, 0.5)';
                         const cooldownWidth = ((maxCooldown - this.abilityCooldown) / maxCooldown) * barWidth;
                         ctx.fillRect(barX, abilityBarY, cooldownWidth, 3);
                     } else {
+                        // Ready to use
                         ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
                         ctx.fillRect(barX, abilityBarY, barWidth, 3);
                     }
@@ -1918,7 +1854,7 @@
                 if (!this.facingRight && other.x > this.x) return false;
                 
                 const verticalAlign = Math.abs((this.y + this.height/2) - (other.y + other.height/2)) < 40;
-
+                
                 // Hit registers during the swing animation (frames 10-14)
                 // Only register hit once per attack
                 if (verticalAlign && this.attackTimer >= 10 && this.attackTimer <= 14) {
@@ -1927,7 +1863,7 @@
                         return true;
                     }
                 }
-
+                
                 return false;
             }
         }
@@ -2173,7 +2109,7 @@
                 // No regular platforms - uses breakable cubes instead
                 return [];
             }
-
+            
             return [];
         }
         
@@ -2194,14 +2130,14 @@
             gameState.spaceships = [];
             gameState.beamedPlayers = { p1: null, p2: null };
             gameState.breakableCubes = []; // Clear cubes for all maps
-
+            
             // Choose random map
             const maps = ['normal', 'comet_field', 'volcano', 'ice', 'alien_invasion', 'breakable_cubes'];
             gameState.currentMap = maps[Math.floor(Math.random() * maps.length)];
-
+            
             // Create platforms for this map
             platforms = createPlatformsForMap(gameState.currentMap);
-
+            
             // Initialize map-specific hazards
             if (gameState.currentMap === 'alien_invasion') {
                 // Create 5 spaceships at different positions and heights
@@ -2216,7 +2152,7 @@
                 // Create scattered platforms of 2-5 cubes each
                 const cubeSize = 40;
                 const groundY = canvas.height - 50;
-
+                
                 // Create multiple scattered platforms - all reachable (max 120px vertical gaps)
                 const platformConfigs = [
                     // Format: [startX, startY, numCubes (horizontal)]
@@ -2225,26 +2161,26 @@
                     [400, groundY - 80, 3],
                     [700, groundY - 80, 3],
                     [1000, groundY - 80, 2],
-
+                    
                     // Second layer (120px up max)
                     [250, groundY - 200, 2],
                     [550, groundY - 200, 3],
                     [850, groundY - 200, 2],
-
+                    
                     // Third layer
                     [100, groundY - 320, 3],
                     [400, groundY - 320, 2],
                     [700, groundY - 320, 3],
-
+                    
                     // Fourth layer
                     [250, groundY - 440, 2],
                     [550, groundY - 440, 4],
                     [900, groundY - 440, 2],
-
+                    
                     // Top layer
                     [400, groundY - 560, 3]
                 ];
-
+                
                 // Create cubes for each platform
                 for (let config of platformConfigs) {
                     const [startX, y, numCubes] = config;
@@ -2252,15 +2188,16 @@
                         gameState.breakableCubes.push(new BreakableCube(startX + i * cubeSize, y, cubeSize));
                     }
                 }
-
+                
                 // Add one TINY neutral platform in the middle that doesn't break
+                // This is a regular platform, not a breakable cube
                 platforms.push(new Platform(canvas.width / 2 - 40, groundY - 80, 80, 20, '#654321'));
             }
-
+            
             // Create players with selected weapons
             // Adjust spawn positions for breakable_cubes map
             let p1X = 100, p1Y = 100, p2X = 1000, p2Y = 100;
-
+            
             if (gameState.currentMap === 'breakable_cubes') {
                 // Spawn both on the tiny neutral platform in the middle
                 const neutralPlatformY = canvas.height - 50 - 80 - 60;
@@ -2269,12 +2206,12 @@
                 p2X = canvas.width / 2 + 10; // Right side of neutral platform
                 p2Y = neutralPlatformY;
             }
-
+            
             player1 = new Player(p1X, p1Y, playerData.p1.color, 'Player 1', {
                 left: 'a', right: 'd', jump: 'w', attack: 's',
                 weapon1: '1', weapon2: '2', weapon3: '3'
             });
-
+            
             player2 = new Player(p2X, p2Y, playerData.p2.color, 'Player 2', {
                 left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', attack: 'ArrowDown',
                 weapon1: '4', weapon2: '5', weapon3: '6'
@@ -2462,14 +2399,14 @@
                 // Sky
                 ctx.fillStyle = '#87ceeb';
                 ctx.fillRect(0, 0, canvas.width, canvas.height - 50);
-
+                
                 // BRIGHT GREEN ACID at bottom
                 const acidGradient = ctx.createLinearGradient(0, canvas.height - 50, 0, canvas.height);
                 acidGradient.addColorStop(0, '#00FF00');  // Bright lime green
                 acidGradient.addColorStop(1, '#32CD32');  // Lime green
                 ctx.fillStyle = acidGradient;
                 ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
-
+                
                 // Acid bubbles effect
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
                 for (let i = 0; i < 10; i++) {
@@ -2479,12 +2416,12 @@
                     ctx.arc(x, canvas.height - 25, size, 0, Math.PI * 2);
                     ctx.fill();
                 }
-
+                
             } else {
                 // Normal/Comet field - default sky
                 // Sky gradient already set in CSS
             }
-
+            
             // Ground (except alien invasion and breakable_cubes which have special ground)
             if (mapType !== 'alien_invasion' && mapType !== 'breakable_cubes') {
                 if (mapType === 'ice') {
@@ -2658,7 +2595,7 @@
                     for (let cube of gameState.breakableCubes) {
                         cube.update(player1, player2);
                     }
-
+                    
                     // Check if players touched the acid (at ground level)
                     if (player1.y + player1.height >= canvas.height - 50) {
                         player1.health = 0; // Instant death in acid
@@ -2667,7 +2604,7 @@
                         player2.health = 0; // Instant death in acid
                     }
                 }
-
+                
                 // Update
                 player1.move(platforms);
                 player2.move(platforms);
@@ -2779,14 +2716,14 @@
             for (let icicle of gameState.icicles) {
                 icicle.draw();
             }
-
+            
             // Only draw breakable cubes on the breakable_cubes map
             if (gameState.currentMap === 'breakable_cubes') {
                 for (let cube of gameState.breakableCubes) {
                     cube.draw();
                 }
             }
-
+            
             player1.draw();
             player2.draw();
             
@@ -2963,21 +2900,6 @@
                 }
             }
             
-            // Ice duck slide (Left Shift = P1, Right Shift = P2)
-            if (e.key === 'Shift' && gameState.currentMap === 'ice') {
-                if (e.location === 1 && player1 && player1.onGround && !player1.isDucking) {
-                    // Left Shift → P1 duck slide
-                    player1.isDucking = true;
-                    player1.duckSlideVel = player1.facingRight ? 18 : -18;
-                }
-                if (e.location === 2 && player2 && player2.onGround && !player2.isDucking) {
-                    // Right Shift → P2 duck slide
-                    player2.isDucking = true;
-                    player2.duckSlideVel = player2.facingRight ? 18 : -18;
-                }
-                e.preventDefault();
-            }
-
             // Weapon switching
             if (player1 && e.key === '1') player1.switchWeapon(0);
             if (player1 && e.key === '2') player1.switchWeapon(1);
@@ -2985,7 +2907,7 @@
             if (player2 && e.key === '4') player2.switchWeapon(0);
             if (player2 && e.key === '5') player2.switchWeapon(1);
             if (player2 && e.key === '6') player2.switchWeapon(2);
-
+            
             // Abilities
             if (e.key === ' ' && player1) {
                 if (player1.activateAbility()) {
@@ -2997,7 +2919,7 @@
                 }
                 e.preventDefault(); // Prevent page scroll
             }
-
+            
             if (e.key === 'Enter' && player2) {
                 if (player2.activateAbility()) {
                     if (player2.ability === 'teleport') {
@@ -3007,7 +2929,7 @@
                 }
                 e.preventDefault();
             }
-
+            
             // Attack
             if (e.key === 's' && player1) {
                 const weapon = player1.attack();
@@ -3019,7 +2941,7 @@
                     );
                 }
             }
-
+            
             if (e.key === 'ArrowDown' && player2) {
                 const weapon = player2.attack();
                 if (weapon && weapon.type === 'ranged') {

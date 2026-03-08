@@ -193,6 +193,37 @@
             return keys[control];
         }
 
+        // Linear interpolation helper
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        // =====================================================================
+        // SEEDED RNG — both clients derive the same seed from the room code
+        // so hazards spawn at exactly the same time and position on both screens
+        // =====================================================================
+        let hazardSeed = (function() {
+            let seed = 0;
+            for (let i = 0; i < roomCode.length; i++) {
+                seed = (seed * 31 + roomCode.charCodeAt(i)) & 0xffffffff;
+            }
+            return Math.abs(seed) || 12345;
+        })();
+
+        function seededRandom() {
+            hazardSeed = (hazardSeed * 1664525 + 1013904223) & 0xffffffff;
+            return (hazardSeed >>> 0) / 0xffffffff;
+        }
+
+        let frameCount = 0;
+        let hazardSpawnTimers = {
+            comet: 0,
+            nextCometThreshold: 0,
+            icicle: 0,
+            nextIcicleThreshold: 0,
+            lavaRise: 0
+        };
+
         // Maps data
         const MAPS = {
             'Normal': {
@@ -264,8 +295,10 @@
             gameOver: false,
             winner: null,
             lavaHeight: 50,
+            lavaRiseTimer: 0,
             comets: [],
             icicles: [],
+            spaceships: [],
             projectiles: []
         };
 
@@ -275,16 +308,160 @@
 
         // Load weapons from localStorage (set by lobby)
         const savedWeapons = JSON.parse(localStorage.getItem('mp_game_weapons') || '[{"name":"Sword","damage":10,"type":"melee"}]');
-        const savedAbility = localStorage.getItem('mp_game_ability') || '';
+        const savedAbility = localStorage.getItem('mp_game_ability') || null;
 
         // Use first 3 weapons from inventory
         const WEAPONS = savedWeapons.slice(0, 3);
-        // If less than 3 weapons, fill with default
         while (WEAPONS.length < 3) {
             WEAPONS.push({name: 'Sword', damage: 10, type: 'melee'});
         }
 
-        // Player class
+        // =====================================================================
+        // HAZARD CLASSES
+        // =====================================================================
+
+        class Comet {
+            constructor() {
+                this.x = seededRandom() * canvas.width;
+                this.y = -50;
+                this.radius = 15;
+                this.speed = 5 + seededRandom() * 3;
+                this.damage = 30;
+                this.active = true;
+            }
+            update() {
+                this.y += this.speed;
+                if (this.y > canvas.height) this.active = false;
+            }
+            draw() {
+                // Trail
+                ctx.fillStyle = 'rgba(255, 120, 0, 0.4)';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y - 25, this.radius * 0.6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'rgba(255, 200, 0, 0.3)';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y - 45, this.radius * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+                // Rock
+                ctx.fillStyle = '#8B4513';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#FF4500';
+                ctx.beginPath();
+                ctx.arc(this.x - 4, this.y - 4, this.radius * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            checkHit(player) {
+                if (player.isInvisible()) return false;
+                const dx = this.x - (player.x + player.width / 2);
+                const dy = this.y - (player.y + player.height / 2);
+                return Math.sqrt(dx * dx + dy * dy) < this.radius + 20;
+            }
+        }
+
+        class Icicle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 10;
+                this.height = 25;
+                this.speed = 6;
+                this.damage = Math.floor(seededRandom() * 20) + 1;
+                this.active = true;
+            }
+            update() {
+                this.y += this.speed;
+                if (this.y > canvas.height) this.active = false;
+            }
+            draw() {
+                ctx.fillStyle = '#B0E0E6';
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y + this.height);
+                ctx.lineTo(this.x - this.width / 2, this.y);
+                ctx.lineTo(this.x + this.width / 2, this.y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                ctx.beginPath();
+                ctx.moveTo(this.x - 1, this.y + this.height);
+                ctx.lineTo(this.x - 2, this.y + 5);
+                ctx.lineTo(this.x + 1, this.y + 8);
+                ctx.closePath();
+                ctx.fill();
+            }
+            checkHit(player) {
+                if (player.isInvisible()) return false;
+                return this.x > player.x &&
+                       this.x < player.x + player.width &&
+                       this.y + this.height > player.y &&
+                       this.y < player.y + player.height;
+            }
+        }
+
+        class Spaceship {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 80;
+                this.height = 35;
+                this.beamWidth = 50;
+                this.beamHeight = 300;
+                this.wobble = 0;
+            }
+            update() {
+                this.wobble += 0.03;
+                this.x += Math.sin(this.wobble) * 0.5;
+            }
+            draw() {
+                const cx = this.x;
+                const cy = this.y;
+                // Beam
+                const grad = ctx.createLinearGradient(cx - this.beamWidth/2, cy, cx + this.beamWidth/2, cy);
+                grad.addColorStop(0, 'rgba(0,255,150,0)');
+                grad.addColorStop(0.5, 'rgba(0,255,150,0.25)');
+                grad.addColorStop(1, 'rgba(0,255,150,0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.moveTo(cx - this.beamWidth/2, cy + this.height/2);
+                ctx.lineTo(cx + this.beamWidth/2, cy + this.height/2);
+                ctx.lineTo(cx + this.beamWidth/2 + 20, cy + this.beamHeight);
+                ctx.lineTo(cx - this.beamWidth/2 - 20, cy + this.beamHeight);
+                ctx.closePath();
+                ctx.fill();
+                // Body
+                ctx.fillStyle = '#555';
+                ctx.beginPath();
+                ctx.ellipse(cx, cy, this.width/2, this.height/2, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Dome
+                ctx.fillStyle = '#222';
+                ctx.beginPath();
+                ctx.ellipse(cx, cy - 8, this.width/3, this.height/2.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Lights
+                const lightColors = ['#ff0', '#0ff', '#f0f'];
+                for (let i = 0; i < 3; i++) {
+                    ctx.fillStyle = lightColors[i];
+                    ctx.beginPath();
+                    ctx.arc(cx - 20 + i * 20, cy + 8, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            checkBeamHit(player) {
+                const beamLeft = this.x - this.beamWidth/2 - 20;
+                const beamRight = this.x + this.beamWidth/2 + 20;
+                const beamTop = this.y + this.height/2;
+                const cx = player.x + player.width/2;
+                return cx > beamLeft && cx < beamRight && player.y < beamTop + this.beamHeight && player.y + player.height > beamTop;
+            }
+        }
+
+        // =====================================================================
+        // PLAYER CLASS
+        // =====================================================================
+
         class Player {
             constructor(x, y, color, name, playerNum) {
                 this.x = x;
@@ -305,39 +482,105 @@
                 this.attackCooldown = 0;
                 this.isAttacking = false;
                 this.attackFrame = 0;
+                this.slideVel = 0;
                 this.controls = {
                     left: ['a', 'ArrowLeft'],
                     right: ['d', 'ArrowRight'],
                     jump: ['w', 'ArrowUp'],
                     attack: ['s', 'ArrowDown']
                 };
+                // Abilities
+                this.ability = null;
+                this.abilityActive = false;
+                this.abilityDuration = 0;
+                this.abilityCooldown = 0;
+                // Puppet interpolation (for opponent)
+                this.isPuppet = false;
+                this.prevState = null;
+                this.targetState = null;
+                this.interpAlpha = 0;
             }
 
-            update() {
-                // Only control your own player
-                if (this.playerNum === myPlayerNum) {
-                    this.velX = 0;
+            // --- LOCAL PLAYER: run input + physics ---
+            updateLocal() {
+                const isIce = currentMap.hazards.includes('slippery');
+                const speed = this.hasSpeed() ? PLAYER_SPEED * 2 : PLAYER_SPEED;
 
-                    if (isKeyPressed(this.controls.left)) {
-                        this.velX = -PLAYER_SPEED;
-                        this.facingRight = false;
-                    }
-                    if (isKeyPressed(this.controls.right)) {
-                        this.velX = PLAYER_SPEED;
-                        this.facingRight = true;
-                    }
-                    if (isKeyPressed(this.controls.jump) && this.onGround) {
-                        this.velY = JUMP_STRENGTH;
-                        this.onGround = false;
+                if (isKeyPressed(this.controls.left)) {
+                    this.velX = -speed;
+                    this.facingRight = false;
+                    if (isIce && this.onGround) this.slideVel = -speed * 0.6;
+                } else if (isKeyPressed(this.controls.right)) {
+                    this.velX = speed;
+                    this.facingRight = true;
+                    if (isIce && this.onGround) this.slideVel = speed * 0.6;
+                } else {
+                    if (isIce && this.onGround && Math.abs(this.slideVel) > 0.1) {
+                        this.x += this.slideVel;
+                        this.slideVel *= 0.88;
+                        this.velX = 0;
+                    } else {
+                        this.velX = 0;
+                        this.slideVel = 0;
                     }
                 }
 
-                // Physics
+                if (isKeyPressed(this.controls.jump) && this.onGround) {
+                    this.velY = JUMP_STRENGTH;
+                    this.onGround = false;
+                }
+
                 this.velY += GRAVITY;
                 this.x += this.velX;
                 this.y += this.velY;
 
-                // Platform collision
+                this._resolvePlatforms();
+                this._resolveBoundaries();
+
+                if (this.attackCooldown > 0) this.attackCooldown--;
+                if (this.isAttacking) {
+                    this.attackFrame++;
+                    if (this.attackFrame > 15) {
+                        this.isAttacking = false;
+                        this.attackFrame = 0;
+                    }
+                }
+
+                this._updateAbilityTimers();
+            }
+
+            // --- OPPONENT PUPPET: smooth interpolation toward received state ---
+            updatePuppet() {
+                if (!this.targetState) return;
+
+                this.interpAlpha = Math.min(this.interpAlpha + 0.2, 1.0);
+
+                if (this.prevState) {
+                    this.x = lerp(this.prevState.x, this.targetState.x, this.interpAlpha);
+                    this.y = lerp(this.prevState.y, this.targetState.y, this.interpAlpha);
+                } else {
+                    this.x = this.targetState.x;
+                    this.y = this.targetState.y;
+                }
+
+                this.facingRight = this.targetState.facingRight;
+                this.isAttacking = this.targetState.isAttacking;
+                this.currentWeapon = this.targetState.currentWeapon;
+                this.hp = this.targetState.hp;
+
+                if (this.attackCooldown > 0) this.attackCooldown--;
+                if (this.isAttacking) {
+                    this.attackFrame++;
+                    if (this.attackFrame > 15) {
+                        this.isAttacking = false;
+                        this.attackFrame = 0;
+                    }
+                }
+
+                this._updateAbilityTimers();
+            }
+
+            _resolvePlatforms() {
                 this.onGround = false;
                 for (let plat of currentMap.platforms) {
                     if (this.x + this.width > plat.x &&
@@ -350,8 +593,9 @@
                         this.onGround = true;
                     }
                 }
+            }
 
-                // Boundaries
+            _resolveBoundaries() {
                 if (this.x < 0) this.x = 0;
                 if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
                 if (this.y + this.height > canvas.height) {
@@ -359,16 +603,37 @@
                     this.onGround = true;
                     this.velY = 0;
                 }
+            }
 
-                // Attack cooldown
-                if (this.attackCooldown > 0) this.attackCooldown--;
-                if (this.isAttacking) {
-                    this.attackFrame++;
-                    if (this.attackFrame > 15) {
-                        this.isAttacking = false;
-                        this.attackFrame = 0;
+            _updateAbilityTimers() {
+                if (this.abilityActive && this.abilityDuration > 0) {
+                    this.abilityDuration--;
+                    if (this.abilityDuration === 0) {
+                        this.abilityActive = false;
+                        this.abilityCooldown = 600; // 10s cooldown after use
                     }
                 }
+                if (this.abilityCooldown > 0) this.abilityCooldown--;
+            }
+
+            // --- ABILITY METHODS ---
+            activateAbility() {
+                if (!this.ability || this.abilityActive || this.abilityCooldown > 0) return false;
+                this.abilityActive = true;
+                this.abilityDuration = 600; // 10 seconds at 60fps
+                return true;
+            }
+
+            isInvisible() {
+                return this.abilityActive && this.ability === 'Invisibility';
+            }
+
+            hasShield() {
+                return this.abilityActive && this.ability === 'Shield';
+            }
+
+            hasSpeed() {
+                return this.abilityActive && this.ability === 'Speed';
             }
 
             attack() {
@@ -386,12 +651,18 @@
             }
 
             takeDamage(amount) {
+                if (this.hasShield()) return; // shield blocks all damage
                 this.hp -= amount;
                 if (this.hp < 0) this.hp = 0;
             }
 
             draw() {
                 ctx.save();
+
+                // Invisibility — draw faintly
+                if (this.isInvisible()) {
+                    ctx.globalAlpha = 0.2;
+                }
 
                 // Body
                 ctx.fillStyle = this.color;
@@ -409,11 +680,45 @@
                     ctx.fillRect(weaponX, this.y + 20, 30, 10);
                 }
 
+                // Shield bubble
+                if (this.hasShield()) {
+                    ctx.globalAlpha = 0.6;
+                    ctx.strokeStyle = '#64C8FF';
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(this.x + this.width/2, this.y + this.height/2, 40, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.globalAlpha = 0.1;
+                    ctx.fillStyle = '#64C8FF';
+                    ctx.beginPath();
+                    ctx.arc(this.x + this.width/2, this.y + this.height/2, 40, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = this.isInvisible() ? 0.2 : 1.0;
+                }
+
+                ctx.globalAlpha = 1.0;
+
                 // Name tag
                 ctx.fillStyle = '#fff';
                 ctx.font = '14px VT323';
                 ctx.textAlign = 'center';
-                ctx.fillText(this.name, this.x + this.width/2, this.y - 10);
+                ctx.fillText(this.name, this.x + this.width/2, this.y - 20);
+
+                // Ability indicator bar (green=ready, gold=active, grey=cooling down)
+                if (this.ability) {
+                    const barW = 40;
+                    const barY = this.y - 10;
+                    if (this.abilityActive) {
+                        ctx.fillStyle = 'rgba(255,215,0,0.9)';
+                        ctx.fillRect(this.x, barY, (this.abilityDuration / 600) * barW, 4);
+                    } else if (this.abilityCooldown > 0) {
+                        ctx.fillStyle = 'rgba(100,100,100,0.6)';
+                        ctx.fillRect(this.x, barY, ((600 - this.abilityCooldown) / 600) * barW, 4);
+                    } else {
+                        ctx.fillStyle = 'rgba(0,255,80,0.9)';
+                        ctx.fillRect(this.x, barY, barW, 4);
+                    }
+                }
 
                 ctx.restore();
             }
@@ -432,18 +737,17 @@
             }
 
             setState(state) {
-                this.x = state.x;
-                this.y = state.y;
-                this.velX = state.velX;
-                this.velY = state.velY;
-                this.hp = state.hp;
-                this.facingRight = state.facingRight;
-                this.isAttacking = state.isAttacking;
-                this.currentWeapon = state.currentWeapon;
+                // Feed the interpolation buffer instead of snapping
+                this.prevState = this.targetState ? { ...this.targetState } : { ...state };
+                this.targetState = state;
+                this.interpAlpha = 0;
             }
         }
 
-        // Projectile class
+        // =====================================================================
+        // PROJECTILE CLASS
+        // =====================================================================
+
         class Projectile {
             constructor(x, y, dir, damage, color) {
                 this.x = x;
@@ -462,6 +766,19 @@
                 if (this.x < -50 || this.x > canvas.width + 50) {
                     this.active = false;
                 }
+                // Check hit on opponent
+                if (this.active &&
+                    this.x + this.width > opponent.x &&
+                    this.x < opponent.x + opponent.width &&
+                    this.y + this.height > opponent.y &&
+                    this.y < opponent.y + opponent.height) {
+                    socket.emit('player_action', {
+                        code: roomCode,
+                        action: 'damage',
+                        action_data: { damage: this.damage, targetPlayer: opponent.playerNum }
+                    });
+                    this.active = false;
+                }
             }
 
             draw() {
@@ -470,7 +787,10 @@
             }
         }
 
-        // Initialize players
+        // =====================================================================
+        // INIT GAME
+        // =====================================================================
+
         function initGame() {
             const p1Color = '#3498db';
             const p2Color = '#e74c3c';
@@ -482,36 +802,125 @@
                 myPlayer = new Player(1000, 500, p2Color, 'Player 2', 2);
                 opponent = new Player(100, 500, p1Color, 'Player 1', 1);
             }
-        }
 
-        // Draw platforms
-        function drawPlatforms() {
-            ctx.fillStyle = '#8B4513';
-            for (let plat of currentMap.platforms) {
-                ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
-                ctx.strokeStyle = '#654321';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(plat.x, plat.y, plat.width, plat.height);
+            opponent.isPuppet = true;
+
+            // Assign saved ability to my player
+            if (savedAbility) {
+                myPlayer.ability = savedAbility;
+            }
+
+            // Initialize map-specific hazards
+            if (mapName === 'Alien Invasion') {
+                gameState.spaceships = [
+                    new Spaceship(300, 60),
+                    new Spaceship(900, 80)
+                ];
+            }
+            if (mapName === 'Volcano') {
+                gameState.lavaHeight = 50;
+            }
+
+            // Pre-roll the first spawn thresholds so both clients agree
+            if (mapName === 'Comet Field') {
+                hazardSpawnTimers.nextCometThreshold = Math.floor(60 + seededRandom() * 120);
+            }
+            if (mapName === 'Ice') {
+                hazardSpawnTimers.nextIcicleThreshold = Math.floor(120 + seededRandom() * 60);
             }
         }
 
-        // Draw background
+        // =====================================================================
+        // DRAW HELPERS
+        // =====================================================================
+
+        function drawPlatforms() {
+            for (let plat of currentMap.platforms) {
+                if (mapName === 'Ice') {
+                    ctx.fillStyle = '#a8d8f0';
+                    ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                    ctx.fillRect(plat.x, plat.y, plat.width, 4);
+                } else if (mapName === 'Volcano') {
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+                    ctx.strokeStyle = '#ff4500';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(plat.x, plat.y, plat.width, plat.height);
+                } else {
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+                    ctx.strokeStyle = '#654321';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(plat.x, plat.y, plat.width, plat.height);
+                }
+            }
+        }
+
         function drawBackground() {
-            // Sky gradient
+            let gradTop, gradBot;
+            if (mapName === 'Volcano') { gradTop = '#1a0000'; gradBot = '#3a0a00'; }
+            else if (mapName === 'Ice') { gradTop = '#0a1a2e'; gradBot = '#0a2a4e'; }
+            else if (mapName === 'Alien Invasion') { gradTop = '#000010'; gradBot = '#050520'; }
+            else if (mapName === 'Comet Field') { gradTop = '#0a0a1a'; gradBot = '#1a0a2e'; }
+            else { gradTop = '#1a1a2e'; gradBot = '#16213e'; }
+
             const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            gradient.addColorStop(0, '#1a1a2e');
-            gradient.addColorStop(1, '#16213e');
+            gradient.addColorStop(0, gradTop);
+            gradient.addColorStop(1, gradBot);
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Map name
             ctx.fillStyle = 'rgba(255,255,255,0.3)';
             ctx.font = '24px VT323';
             ctx.textAlign = 'center';
             ctx.fillText(mapName, canvas.width/2, 30);
         }
 
-        // Update UI
+        function drawHazards() {
+            // Lava (Volcano)
+            if (mapName === 'Volcano' && gameState.lavaHeight > 0) {
+                const lavaGrad = ctx.createLinearGradient(0, canvas.height - gameState.lavaHeight, 0, canvas.height);
+                lavaGrad.addColorStop(0, '#FF6000');
+                lavaGrad.addColorStop(0.4, '#FF2200');
+                lavaGrad.addColorStop(1, '#AA0000');
+                ctx.fillStyle = lavaGrad;
+                ctx.fillRect(0, canvas.height - gameState.lavaHeight, canvas.width, gameState.lavaHeight);
+                // Lava surface shimmer
+                ctx.fillStyle = 'rgba(255,200,0,0.3)';
+                ctx.fillRect(0, canvas.height - gameState.lavaHeight, canvas.width, 4);
+            }
+
+            // Crater + spaceships (Alien Invasion)
+            if (mapName === 'Alien Invasion') {
+                // Crater
+                ctx.fillStyle = '#020210';
+                ctx.beginPath();
+                ctx.arc(canvas.width/2, canvas.height - 50, 85, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#1a1a40';
+                ctx.lineWidth = 8;
+                ctx.beginPath();
+                ctx.arc(canvas.width/2, canvas.height - 50, 85, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.fillStyle = 'rgba(255,0,50,0.15)';
+                ctx.beginPath();
+                ctx.arc(canvas.width/2, canvas.height - 50, 60, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Ships + beams
+                for (let ship of gameState.spaceships) {
+                    ship.draw();
+                }
+            }
+
+            // Comets
+            for (let c of gameState.comets) c.draw();
+
+            // Icicles
+            for (let ic of gameState.icicles) ic.draw();
+        }
+
         function updateUI() {
             const p1 = myPlayerNum === 1 ? myPlayer : opponent;
             const p2 = myPlayerNum === 2 ? myPlayer : opponent;
@@ -522,56 +931,151 @@
             document.getElementById('p2Weapon').textContent = p2.weapons[p2.currentWeapon].name;
         }
 
-        // Check attack collision
+        // =====================================================================
+        // ATTACK COLLISION
+        // =====================================================================
+
         function checkAttackCollision() {
             if (myPlayer.isAttacking && myPlayer.attackFrame === 5) {
                 const weapon = myPlayer.weapons[myPlayer.currentWeapon];
-                const attackRange = 60;
+                if (weapon.type === 'melee') {
+                    const attackRange = 60;
+                    let hitX, hitWidth;
+                    if (myPlayer.facingRight) {
+                        hitX = myPlayer.x + myPlayer.width;
+                        hitWidth = attackRange;
+                    } else {
+                        hitX = myPlayer.x - attackRange;
+                        hitWidth = attackRange;
+                    }
 
-                let hitX, hitWidth;
-                if (myPlayer.facingRight) {
-                    hitX = myPlayer.x + myPlayer.width;
-                    hitWidth = attackRange;
-                } else {
-                    hitX = myPlayer.x - attackRange;
-                    hitWidth = attackRange;
-                }
-
-                // Check if opponent is in range
-                if (opponent.x + opponent.width > hitX &&
-                    opponent.x < hitX + hitWidth &&
-                    opponent.y + opponent.height > myPlayer.y &&
-                    opponent.y < myPlayer.y + myPlayer.height) {
-
-                    // Send damage to server
-                    socket.emit('player_action', {
-                        code: roomCode,
-                        action: 'damage',
-                        action_data: {
-                            damage: weapon.damage,
-                            targetPlayer: opponent.playerNum
-                        }
-                    });
+                    if (opponent.x + opponent.width > hitX &&
+                        opponent.x < hitX + hitWidth &&
+                        opponent.y + opponent.height > myPlayer.y &&
+                        opponent.y < myPlayer.y + myPlayer.height) {
+                        socket.emit('player_action', {
+                            code: roomCode,
+                            action: 'damage',
+                            action_data: { damage: weapon.damage, targetPlayer: opponent.playerNum }
+                        });
+                    }
                 }
             }
         }
 
-        // Game loop
+        // =====================================================================
+        // HAZARD UPDATES (deterministic — runs same on both clients)
+        // =====================================================================
+
+        function updateHazards() {
+            // --- Comet Field ---
+            if (mapName === 'Comet Field') {
+                hazardSpawnTimers.comet++;
+                if (hazardSpawnTimers.comet >= hazardSpawnTimers.nextCometThreshold) {
+                    gameState.comets.push(new Comet());
+                    hazardSpawnTimers.comet = 0;
+                    hazardSpawnTimers.nextCometThreshold = Math.floor(60 + seededRandom() * 120);
+                }
+                for (let i = gameState.comets.length - 1; i >= 0; i--) {
+                    const c = gameState.comets[i];
+                    c.update();
+                    if (!c.active) { gameState.comets.splice(i, 1); continue; }
+                    if (c.checkHit(myPlayer)) {
+                        myPlayer.takeDamage(c.damage);
+                        gameState.comets.splice(i, 1);
+                    }
+                }
+            }
+
+            // --- Ice ---
+            if (mapName === 'Ice') {
+                hazardSpawnTimers.icicle++;
+                if (hazardSpawnTimers.icicle >= hazardSpawnTimers.nextIcicleThreshold) {
+                    const highPlatform = currentMap.platforms[currentMap.platforms.length - 1];
+                    const numIcicles = 3 + Math.floor(seededRandom() * 3);
+                    for (let i = 0; i < numIcicles; i++) {
+                        const ix = highPlatform.x + seededRandom() * highPlatform.width;
+                        gameState.icicles.push(new Icicle(ix, highPlatform.y));
+                    }
+                    hazardSpawnTimers.icicle = 0;
+                    hazardSpawnTimers.nextIcicleThreshold = Math.floor(120 + seededRandom() * 60);
+                }
+                for (let i = gameState.icicles.length - 1; i >= 0; i--) {
+                    const ic = gameState.icicles[i];
+                    ic.update();
+                    if (!ic.active) { gameState.icicles.splice(i, 1); continue; }
+                    if (ic.checkHit(myPlayer)) {
+                        myPlayer.takeDamage(ic.damage);
+                        gameState.icicles.splice(i, 1);
+                    }
+                }
+            }
+
+            // --- Volcano: rising lava ---
+            if (mapName === 'Volcano') {
+                hazardSpawnTimers.lavaRise++;
+                if (hazardSpawnTimers.lavaRise >= 1200) {
+                    gameState.lavaHeight = Math.min(gameState.lavaHeight + 80, 420);
+                    hazardSpawnTimers.lavaRise = 0;
+                }
+                const lavaY = canvas.height - gameState.lavaHeight;
+                if (myPlayer.y + myPlayer.height >= lavaY) {
+                    myPlayer.takeDamage(5);
+                }
+            }
+
+            // --- Alien Invasion: beam lift + crater death ---
+            if (mapName === 'Alien Invasion') {
+                for (let ship of gameState.spaceships) {
+                    ship.update();
+                    if (ship.checkBeamHit(myPlayer)) {
+                        myPlayer.y = Math.max(myPlayer.y - 4, 50);
+                        myPlayer.velY = 0;
+                    }
+                }
+                // Crater instant death
+                const craterX = canvas.width / 2;
+                const craterRadius = 85;
+                const myCx = myPlayer.x + myPlayer.width / 2;
+                const myFeet = myPlayer.y + myPlayer.height;
+                const dist = Math.sqrt(Math.pow(myCx - craterX, 2) + Math.pow(myFeet - (canvas.height - 50), 2));
+                if (dist < craterRadius && myFeet > canvas.height - 120) {
+                    myPlayer.hp = 0;
+                }
+            }
+        }
+
+        // =====================================================================
+        // GAME LOOP
+        // =====================================================================
+
         let lastSendTime = 0;
+
         function gameLoop() {
             if (gameState.gameOver) return;
+
+            frameCount++;
 
             // Clear
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw
+            // Draw background
             drawBackground();
+
+            // Draw hazards behind platforms (lava, crater, beams)
+            drawHazards();
+
+            // Draw platforms
             drawPlatforms();
 
-            // Update my player
-            myPlayer.update();
+            // Update players
+            myPlayer.updateLocal();
+            opponent.updatePuppet();
 
-            // Check attacks
+            // Update hazards (damage + spawning)
+            updateHazards();
+
+            // Check melee attack collision
             checkAttackCollision();
 
             // Draw players
@@ -590,7 +1094,7 @@
             // Update UI
             updateUI();
 
-            // Send position to server (throttled to 20 times per second)
+            // Send my position to server (throttled to 20x/second)
             const now = Date.now();
             if (now - lastSendTime > 50) {
                 socket.emit('player_action', {
@@ -601,31 +1105,28 @@
                 lastSendTime = now;
             }
 
-            // Check win condition
+            // Win condition
             if (opponent.hp <= 0 && !gameState.gameOver) {
                 gameState.gameOver = true;
                 gameState.winner = myPlayerNum;
-                socket.emit('game_over', {
-                    code: roomCode,
-                    winner: myPlayerNum
-                });
+                socket.emit('game_over', { code: roomCode, winner: myPlayerNum });
             }
-
             if (myPlayer.hp <= 0 && !gameState.gameOver) {
                 gameState.gameOver = true;
                 gameState.winner = opponent.playerNum;
+                socket.emit('game_over', { code: roomCode, winner: opponent.playerNum });
             }
 
             requestAnimationFrame(gameLoop);
         }
 
-        // Socket events
+        // =====================================================================
+        // SOCKET EVENTS
+        // =====================================================================
+
         socket.on('connect', () => {
-            console.log('Connected to server');
             document.getElementById('connectionStatus').className = 'connected';
             document.getElementById('connectionStatus').textContent = 'Connected';
-
-            // Rejoin the room
             socket.emit('rejoin_game', { code: roomCode, player: myPlayerNum });
         });
 
@@ -637,13 +1138,31 @@
         socket.on('opponent_action', (data) => {
             if (data.action === 'move') {
                 opponent.setState(data.data);
+
             } else if (data.action === 'damage') {
                 if (data.data.targetPlayer === myPlayerNum) {
                     myPlayer.takeDamage(data.data.damage);
                 }
+
             } else if (data.action === 'attack') {
                 opponent.isAttacking = true;
                 opponent.attackFrame = 0;
+
+            } else if (data.action === 'ability') {
+                opponent.ability = data.data.ability;
+                opponent.abilityActive = true;
+                opponent.abilityDuration = 600;
+                // Teleport: snap puppet to the received position immediately
+                if (data.data.ability === 'Teleport') {
+                    const snapState = opponent.targetState
+                        ? { ...opponent.targetState, x: data.data.x, y: data.data.y }
+                        : { x: data.data.x, y: data.data.y, velX: 0, velY: 0,
+                            hp: opponent.hp, facingRight: opponent.facingRight,
+                            isAttacking: false, currentWeapon: 0 };
+                    opponent.prevState = null;
+                    opponent.targetState = snapState;
+                    opponent.interpAlpha = 1;
+                }
             }
         });
 
@@ -663,7 +1182,6 @@
             }
             document.getElementById('gameOver').style.display = 'block';
 
-            // Return to lobby after 3 seconds (with reward if won)
             setTimeout(() => {
                 if (iWon) {
                     window.location.href = '/multiplayer?reward=100';
@@ -673,12 +1191,15 @@
             }, 3000);
         });
 
-        socket.on('player_left', (data) => {
+        socket.on('player_left', () => {
             alert('Opponent disconnected!');
             window.location.href = '/multiplayer';
         });
 
-        // Keyboard events
+        // =====================================================================
+        // KEYBOARD EVENTS
+        // =====================================================================
+
         window.addEventListener('keydown', (e) => {
             keys[e.key] = true;
 
@@ -686,6 +1207,29 @@
             if (e.key === '1') myPlayer.switchWeapon(0);
             if (e.key === '2') myPlayer.switchWeapon(1);
             if (e.key === '3') myPlayer.switchWeapon(2);
+
+            // Ability activation (Space or Enter)
+            if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                if (myPlayer.activateAbility()) {
+                    // Teleport: pick a safe random position
+                    if (myPlayer.ability === 'Teleport') {
+                        myPlayer.x = 150 + Math.random() * (canvas.width - 300);
+                        myPlayer.y = 200 + Math.random() * 200;
+                        myPlayer.velX = 0;
+                        myPlayer.velY = 0;
+                    }
+                    socket.emit('player_action', {
+                        code: roomCode,
+                        action: 'ability',
+                        action_data: {
+                            ability: myPlayer.ability,
+                            x: myPlayer.x,
+                            y: myPlayer.y
+                        }
+                    });
+                }
+            }
 
             // Attack
             if (e.key === 's' || e.key === 'ArrowDown') {
@@ -718,7 +1262,10 @@
             keys[e.key] = false;
         });
 
-        // Start game
+        // =====================================================================
+        // START
+        // =====================================================================
+
         initGame();
         gameLoop();
     </script>
