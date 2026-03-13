@@ -248,6 +248,7 @@
 </head>
 <body>
     <div class="lobby">
+        <canvas id="miniLogo" width="80" height="95" style="display:block;margin:0 auto 4px auto;"></canvas>
         <h1>MINA'S PVP GAME</h1>
         <p class="subtitle">Multiplayer Lobby</p>
 
@@ -580,5 +581,83 @@
         // Initialize UI
         updateUI();
     </script>
+<script>
+// Mini disco ball logo for multiplayer page
+(function() {
+    const logo = document.getElementById('miniLogo');
+    if (!logo) return;
+    const c = logo.getContext('2d');
+    const W = logo.width, H = logo.height;
+    const CX = W / 2, BY = 62, BR = 28;
+    let angle = 0;
+
+    function draw() {
+        c.clearRect(0, 0, W, H);
+
+        // String
+        c.strokeStyle = '#aaa'; c.lineWidth = 1.5;
+        c.beginPath(); c.moveTo(CX, 0); c.lineTo(CX, BY - BR); c.stroke();
+
+        // Glow
+        const t = Date.now() / 800;
+        const gr = (Math.sin(t)+1)/2, gg = (Math.sin(t+2)+1)/2, gb = (Math.sin(t+4)+1)/2;
+        const grd = c.createRadialGradient(CX, BY, BR*0.3, CX, BY, BR*2);
+        grd.addColorStop(0, `rgba(${Math.floor(gr*255)},${Math.floor(gg*255)},${Math.floor(gb*255)},0.3)`);
+        grd.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = grd;
+        c.beginPath(); c.arc(CX, BY, BR*2, 0, Math.PI*2); c.fill();
+
+        // Ball
+        const bg = c.createRadialGradient(CX-8, BY-8, 2, CX, BY, BR);
+        bg.addColorStop(0, '#fff'); bg.addColorStop(0.3, '#c0c8d8');
+        bg.addColorStop(0.7, '#7080a0'); bg.addColorStop(1, '#303850');
+        c.fillStyle = bg; c.beginPath(); c.arc(CX, BY, BR, 0, Math.PI*2); c.fill();
+
+        // Tiles
+        c.save(); c.beginPath(); c.arc(CX, BY, BR, 0, Math.PI*2); c.clip();
+        const TILE = 6;
+        const cols = Math.ceil(BR*2/TILE)+2, rows = Math.ceil(BR*2/TILE)+2;
+        for (let r = 0; r < rows; r++) {
+            for (let col = 0; col < cols; col++) {
+                const tx = CX-BR-TILE+col*TILE, ty = BY-BR-TILE+r*TILE;
+                const sh = (Math.sin(angle+col*0.8+r*0.6)+1)/2;
+                const hue = (angle*40+col*25+r*35)%360;
+                c.fillStyle = `hsl(${hue},${sh>0.7?60:10}%,${Math.floor((100+sh*155)*0.6)}%)`;
+                c.fillRect(tx+1,ty+1,TILE-2,TILE-2);
+                if (sh>0.85) { c.fillStyle=`rgba(255,255,255,${(sh-0.85)*4})`; c.fillRect(tx+1,ty+1,TILE-2,TILE-2); }
+            }
+        }
+        c.restore();
+
+        // Specular
+        const sp = c.createRadialGradient(CX-9,BY-9,1,CX-6,BY-6,11);
+        sp.addColorStop(0,'rgba(255,255,255,0.9)'); sp.addColorStop(1,'rgba(255,255,255,0)');
+        c.fillStyle=sp; c.beginPath(); c.arc(CX,BY,BR,0,Math.PI*2); c.fill();
+
+        // Yeti (tiny)
+        const YY = BY - BR + 1;
+        c.fillStyle='#e0eaf5';
+        c.beginPath(); c.ellipse(CX,YY-1,12,8,0,Math.PI,0); c.fill();
+        c.beginPath(); c.arc(CX,YY-9,9,0,Math.PI*2); c.fill();
+
+        // Red eyes
+        const eg=(Math.sin(Date.now()/300)+1)/2;
+        c.shadowBlur=4; c.shadowColor='#f00';
+        c.fillStyle=`rgb(${200+Math.floor(eg*55)},0,0)`;
+        c.beginPath(); c.arc(CX-3,YY-10,1.5,0,Math.PI*2); c.fill();
+        c.beginPath(); c.arc(CX+3,YY-10,1.5,0,Math.PI*2); c.fill();
+        c.shadowBlur=0;
+
+        // Fangs
+        c.fillStyle='#fff';
+        c.beginPath(); c.moveTo(CX-2,YY-5); c.lineTo(CX-1,YY-2); c.lineTo(CX,YY-5); c.fill();
+        c.beginPath(); c.moveTo(CX,YY-5); c.lineTo(CX+1,YY-2); c.lineTo(CX+2,YY-5); c.fill();
+
+        angle += 0.04;
+        requestAnimationFrame(draw);
+    }
+    draw();
+})();
+</script>
 </body>
 </html>

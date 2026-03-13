@@ -1461,7 +1461,7 @@
                     if (this.abilityDuration === 0) {
                         this.abilityActive = false;
                         // Teleport has 2 second cooldown, others have 10 seconds
-                        this.abilityCooldown = this.ability === 'teleport' ? 120 : 600; // 2 or 10 seconds at 60 FPS
+                        this.abilityCooldown = this.ability === 'teleport' ? 60 : 600; // 1 or 10 seconds at 60 FPS
                     }
                 }
                 
@@ -1476,7 +1476,8 @@
                 }
                 
                 this.abilityActive = true;
-                this.abilityDuration = 600; // 10 seconds at 60 FPS
+                // Teleport is instant - set duration to 1 frame so cooldown starts immediately
+                this.abilityDuration = this.ability === 'teleport' ? 1 : 600;
                 return true;
             }
             
@@ -1492,14 +1493,19 @@
                 return this.abilityActive && this.ability === 'speed';
             }
             
-            takeDamage(damage) {
+            takeDamage(damage, knockbackDir = 0) {
                 // Shield blocks all damage
                 if (this.hasShield()) {
                     return;
                 }
-                
+
                 this.health -= damage;
                 if (this.health < 0) this.health = 0;
+
+                // Ice knockback — stronger weapons send you flying further
+                if (knockbackDir !== 0 && gameState.currentMap === 'ice') {
+                    this.slideVel = knockbackDir * damage * 0.3;
+                }
             }
             
             draw() {
@@ -1592,9 +1598,10 @@
                 // Draw ability cooldown indicator
                 if (this.ability) {
                     const abilityBarY = this.y - 25;
-                    const maxCooldown = this.ability === 'teleport' ? 120 : 600;
+                    const maxCooldown = this.ability === 'teleport' ? 60 : 600;
 
-                    if (this.abilityActive) {
+                    if (this.abilityActive && this.ability !== 'teleport') {
+                        // Show active duration bar (not for teleport — it's instant!)
                         ctx.fillStyle = 'rgba(255, 215, 0, 0.5)';
                         const durationWidth = (this.abilityDuration / 600) * barWidth;
                         ctx.fillRect(barX, abilityBarY, durationWidth, 3);
@@ -2726,10 +2733,10 @@
                     }
                     
                     if (proj.checkHit(player1)) {
-                        player1.takeDamage(proj.damage);
+                        player1.takeDamage(proj.damage, proj.direction);
                         gameState.projectiles.splice(i, 1);
                     } else if (proj.checkHit(player2)) {
-                        player2.takeDamage(proj.damage);
+                        player2.takeDamage(proj.damage, proj.direction);
                         gameState.projectiles.splice(i, 1);
                     }
                 }
@@ -2737,12 +2744,12 @@
                 // Check melee hits
                 if (player1.checkMeleeHit(player2)) {
                     const weapon = player1.getCurrentWeapon();
-                    player2.takeDamage(weapon.damage);
+                    player2.takeDamage(weapon.damage, player1.facingRight ? 1 : -1);
                 }
-                
+
                 if (player2.checkMeleeHit(player1)) {
                     const weapon = player2.getCurrentWeapon();
-                    player1.takeDamage(weapon.damage);
+                    player1.takeDamage(weapon.damage, player2.facingRight ? 1 : -1);
                 }
                 
                 // Check winner

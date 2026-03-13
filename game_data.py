@@ -267,6 +267,18 @@ MAPS = [
             {"x": 500, "y": 300, "width": 200, "height": 20},    # Over the crater!
         ]
     },
+    {
+        "name": "Breakable Cubes",
+        "description": "Platforms break after 1 second! Acid floor = instant death!",
+        "hazards": [
+            {
+                "type": "acid",
+                "damage": "instant death",
+                "location": "floor"
+            }
+        ],
+        "platforms": []  # Breakable cube platforms are generated on the client side
+    },
 ]
 
 

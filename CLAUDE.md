@@ -25,6 +25,7 @@ Mina (11 years old) and her dad are building a PVP fighting game.
 - Deployed at: https://pvp-fighting-game.onrender.com
 - GitHub repo: mwu-cloud/PvP_Fighting_Game
 - Local dev: run `python app.py` then open http://localhost:5050
+- Routes: `/` = landing page, `/game` = local 2-player, `/multiplayer` = online lobby
 
 ---
 
@@ -34,6 +35,7 @@ Mina (11 years old) and her dad are building a PVP fighting game.
 /Users/QueenMina/PVP Game/
 ├── app.py               # Python Flask server (multiplayer backend)
 ├── game_data.py         # All game data: weapons, maps, abilities, etc.
+├── index.html           # Landing page - choose Local or Online mode
 ├── game.html            # Local 2-player game (same keyboard, main game)
 ├── multiplayer.html     # Online multiplayer lobby + store
 ├── multiplayer_game.html# Online battle page
@@ -61,6 +63,8 @@ Mina (11 years old) and her dad are building a PVP fighting game.
 - Both click "I'M READY" → random map is chosen → battle starts
 - Each player is on their own device/screen
 - Winner gets 100 coins, redirected back to lobby with ?reward=100
+- Graphics match the local game: oval-body characters, full weapon art, proper terrain backgrounds
+- All 6 maps available including Breakable Cubes (acid floor, cubes break after 1s and reform after 1s)
 
 ### Store (multiplayer.html)
 - Coins stored in localStorage (key: mp_coins), start with 200
@@ -150,23 +154,38 @@ Steps:
 
 ## Known Issues / TODO
 
-1. **Multiplayer tested and working** - Movement syncs between players, comets spawn and deal damage,
-   health bars update correctly. Tested with two browser tabs on Digital Ocean host.
+1. **Multiplayer sync fixed** - Fixed race condition where position updates were dropped because
+   they were sent before the other player's socket had rejoined the room. Server now emits
+   `both_ready` when both players have rejoined after the page redirect; clients wait for that
+   signal (with a 1.5-second fallback) before sending position updates. Movement now syncs correctly.
 
-4. **Recent changes from chat session (game.html only)**:
+2. **Multiplayer graphics upgraded** - `multiplayer_game.html` now uses the same rich visuals as
+   `game.html`:
+   - Players drawn with oval body + round head + eye (instead of plain rectangle)
+   - All 15+ weapons drawn with proper art (sword, bow, guitar, bazooka, disco ball, etc.)
+   - Proper terrain backgrounds per map (sky/mountains/trees for Normal, starfield for Alien, etc.)
+   - Breakable Cubes map fully playable in multiplayer (animated acid floor, cubes break/reform)
+   - All 6 maps now available in both local and online multiplayer
+
+3. **Recent changes (game.html — local game only)**:
    - P2 weapon keys changed from 7/8/9 to 4/5/6
-   - New Breakable Cubes map added (6th map)
    - Ice map is now much slipperier (near-zero friction)
    - Attack recoil added (weapon damage × 0.15 pushes attacker backward)
    - Hit detection improved: registers during frames 10-14, one hit per swing
 
-2. **No persistent accounts** - Player data only lives in localStorage.
+4. **No persistent accounts** - Player data only lives in localStorage.
    If you clear browser data or use a different browser, you lose everything.
    Good future project: save to a JSON file or database on the server.
 
-3. **Multiplayer store not wired to server** - The store on the lobby page uses
+5. **Multiplayer store not wired to server** - The store on the lobby page uses
    localStorage only. The server has buy_item/item_purchased socket events
    but they're not connected to the frontend store.
+
+6. **Damage/health sync in multiplayer** - Needs verification. Weapon hits send `damage` events
+   via socket relay to the opponent's screen. HP is also carried in every `move` packet. Comet
+   hits call `takeDamage` locally and the HP change propagates via the next move packet. If
+   damage still seems broken, add console.log before `socket.emit('player_action', {action:'damage'...})`
+   in the attack hit-detection block.
 
 ---
 
@@ -175,3 +194,4 @@ Steps:
 - Added the **Disco Ball** weapon (Tier 4, 20 damage, ranged) — it's her signature weapon!
 - The Yeti easter egg says "Mina is the Beast" on its sign
 - Co-created all the maps and weapon ideas
+- Requested the multiplayer graphics upgrade — online game now looks just as good as local!

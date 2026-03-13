@@ -80,7 +80,14 @@ def create_new_player(player_num):
 
 @app.route('/')
 def home():
-    """When someone visits the main page, send them the game!"""
+    """Landing page - choose local or online"""
+    return send_from_directory('.', 'index.html')
+
+
+@app.route('/game')
+@app.route('/game.html')
+def local_game():
+    """Local 2-player game"""
     return send_from_directory('.', 'game.html')
 
 
@@ -119,12 +126,16 @@ def handle_disconnect():
     for code, room in list(game_rooms.items()):
         if request.sid in room['players']:
             del room['players'][request.sid]
-            # Tell the other player
-            emit('player_left', {'message': 'Other player disconnected'}, room=code)
-            # Delete empty rooms
-            if len(room['players']) == 0:
-                del game_rooms[code]
-                print(f"Room {code} deleted (empty)")
+            # If the game is actively playing, players are just redirecting to the battle page
+            # — keep the room alive so they can rejoin_game with the same code.
+            # Only delete the room (and notify) if we're still in the lobby (waiting state).
+            if room['state'] == 'waiting':
+                emit('player_left', {'message': 'Other player disconnected'}, room=code)
+                if len(room['players']) == 0:
+                    del game_rooms[code]
+                    print(f"Room {code} deleted (empty)")
+            else:
+                print(f"Player left room {code} during game (state={room['state']}) — keeping room alive for rejoin")
 
 
 @socketio.on('create_room')
@@ -211,16 +222,26 @@ def handle_rejoin_game(data):
     player_num = data.get('player')
 
     if code not in game_rooms:
-        emit('join_error', {'message': 'Room no longer exists!'})
-        return
+        # Room may have been lost (e.g. server restart) — create a fresh one
+        # so the relay still works even if state is lost
+        print(f"Room {code} not found for rejoin — creating placeholder")
+        game_rooms[code] = create_new_room(code)
+        game_rooms[code]['state'] = 'playing'
 
     room = game_rooms[code]
 
-    # Add the player back to the room
+    # Add the player to the room and join the socket room
     room['players'][request.sid] = create_new_player(player_num)
+    room['players'][request.sid]['rejoined'] = True
     join_room(code)
 
     print(f"Player {player_num} rejoined room {code}")
+
+    # Tell both clients it's safe to start syncing
+    rejoined_count = sum(1 for p in room['players'].values() if p.get('rejoined'))
+    if rejoined_count >= 2:
+        print(f"Both players in room {code} — emitting both_ready")
+        emit('both_ready', {}, room=code)
 
 
 @socketio.on('player_action')
@@ -231,6 +252,9 @@ def handle_player_action(data):
 
     if code not in game_rooms:
         return
+
+    # Make sure this socket is in the room (handles reconnect edge cases)
+    join_room(code)
 
     # Send the action to the other player
     emit('opponent_action', {
@@ -299,9 +323,10 @@ def handle_game_over(data):
         if player['number'] == winner:
             player['coins'] += WIN_REWARD
 
-    # Reset ready status for next round
+    # Reset ready status and rejoin flags for next round
     for player in room['players'].values():
         player['ready'] = False
+        player['rejoined'] = False
 
     emit('battle_result', {
         'winner': winner,
