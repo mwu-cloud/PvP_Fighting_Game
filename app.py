@@ -8,7 +8,7 @@
 
 import random
 import string
-from flask import Flask, render_template, send_from_directory, request
+from flask import Flask, render_template, send_from_directory, request, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
 # Import our game data
@@ -19,6 +19,16 @@ from game_data import (
     get_random_map,
     STORE_PRICES,
     WIN_REWARD,
+    GRAVITY,
+    JUMP_STRENGTH,
+    PLAYER_SPEED,
+    PLAYER_WIDTH,
+    PLAYER_HEIGHT,
+    STARTING_HP,
+    ATTACK_COOLDOWN,
+    WEAPONS,
+    MAPS,
+    ABILITIES,
 )
 
 # Create the Flask app
@@ -27,7 +37,7 @@ app.config['SECRET_KEY'] = 'minas-secret-game-key'
 
 # Create the SocketIO instance for real-time multiplayer
 # async_mode='eventlet' makes it work on Render
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', ping_timeout=60, ping_interval=25)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', ping_timeout=60, ping_interval=25)
 
 
 # =============================================================================
@@ -103,6 +113,44 @@ def multiplayer():
 def multiplayer_game():
     """Multiplayer game page - the actual battle"""
     return send_from_directory('.', 'multiplayer_game.html')
+
+
+@app.route('/game_engine.js')
+def game_engine():
+    """Shared JS engine used by both game.html and multiplayer_game.html"""
+    return send_from_directory('.', 'game_engine.js')
+
+
+@app.route('/disco_logo.js')
+def disco_logo():
+    """Shared disco ball + yeti drawing code used by index.html and multiplayer.html"""
+    return send_from_directory('.', 'disco_logo.js')
+
+
+@app.route('/game-data')
+def game_data_api():
+    """Returns all game constants and data as JSON.
+    Both game.html and multiplayer_game.html fetch this so they
+    always use the same values — change game_data.py and both games update!
+    """
+    # Flatten weapons into a single list with tier included
+    all_weapons = []
+    for tier, weapons in WEAPONS.items():
+        for w in weapons:
+            all_weapons.append({**w, "tier": tier})
+
+    return jsonify({
+        "GRAVITY": GRAVITY,
+        "JUMP_STRENGTH": JUMP_STRENGTH,
+        "PLAYER_SPEED": PLAYER_SPEED,
+        "PLAYER_WIDTH": PLAYER_WIDTH,
+        "PLAYER_HEIGHT": PLAYER_HEIGHT,
+        "STARTING_HP": STARTING_HP,
+        "ATTACK_COOLDOWN": ATTACK_COOLDOWN,
+        "weapons": all_weapons,
+        "maps": MAPS,
+        "abilities": [a["name"].lower() for a in ABILITIES],
+    })
 
 
 # =============================================================================

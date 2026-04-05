@@ -234,11 +234,12 @@ MAPS = [
         ],
         "platforms": [
             {"x": 0, "y": 650, "width": 1200, "height": 50},
-            {"x": 100, "y": 530, "width": 200, "height": 20},
-            {"x": 900, "y": 530, "width": 200, "height": 20},
-            {"x": 350, "y": 450, "width": 150, "height": 20},
-            {"x": 700, "y": 450, "width": 150, "height": 20},
-            {"x": 500, "y": 200, "width": 200, "height": 20},  # High icicle platform!
+            {"x": 200, "y": 550, "width": 200, "height": 20},
+            {"x": 800, "y": 550, "width": 200, "height": 20},
+            {"x": 100, "y": 430, "width": 150, "height": 20},
+            {"x": 500, "y": 400, "width": 200, "height": 20},
+            {"x": 950, "y": 430, "width": 150, "height": 20},
+            {"x": 500, "y": 250, "width": 200, "height": 20},  # High icicle platform!
         ]
     },
     {

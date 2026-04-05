@@ -303,6 +303,13 @@
                     <button class="store-btn" onclick="buyAbility()">BUY</button>
                 </div>
 
+                <div class="store-item" style="border:1px solid #9333ea;background:rgba(147,51,234,0.15)">
+                    <div class="store-item-name" style="color:#c084fc;">✨ Magic Wand</div>
+                    <div class="store-item-desc">One-use! Casts a random spell — Blast, Freeze, Fire Ring, or Rainstorm. Stronger than any weapon!</div>
+                    <div class="store-item-price">300 coins</div>
+                    <button class="store-btn" id="wandBtn" onclick="buyWand()" style="background:linear-gradient(135deg,#6a0dad,#ff6600);">BUY</button>
+                </div>
+
                 <div class="inventory-section">
                     <div class="inventory-title">YOUR WEAPONS:</div>
                     <div id="weaponInventory">
@@ -314,6 +321,13 @@
                     <div class="inventory-title">YOUR ABILITY:</div>
                     <div id="abilityInventory">
                         <span class="inventory-item ability-item">None</span>
+                    </div>
+                </div>
+
+                <div class="inventory-section">
+                    <div class="inventory-title" style="color:#c084fc;">YOUR WAND:</div>
+                    <div id="wandInventory">
+                        <span class="inventory-item" style="color:#888;">None</span>
                     </div>
                 </div>
             </div>
@@ -344,7 +358,8 @@
         let playerData = {
             coins: parseInt(localStorage.getItem('mp_coins') || '200'), // Start with 200 coins
             weapons: JSON.parse(localStorage.getItem('mp_weapons') || '[{"name":"Sword","damage":10,"type":"melee"}]'),
-            ability: localStorage.getItem('mp_ability') || null
+            ability: localStorage.getItem('mp_ability') || null,
+            wand: JSON.parse(localStorage.getItem('mp_wand') || 'null'),
         };
 
         // All possible weapons (by tier)
@@ -386,6 +401,7 @@
             if (playerData.ability) {
                 localStorage.setItem('mp_ability', playerData.ability);
             }
+            localStorage.setItem('mp_wand', JSON.stringify(playerData.wand));
         }
 
         // Update UI
@@ -401,6 +417,19 @@
             // Update ability
             const abilityDiv = document.getElementById('abilityInventory');
             abilityDiv.innerHTML = `<span class="inventory-item ability-item">${playerData.ability || 'None'}</span>`;
+
+            // Update wand
+            const wandDiv = document.getElementById('wandInventory');
+            if (playerData.wand) {
+                const spellEmoji = {blast:'💥',freeze:'❄️',fire:'🔥',rain:'⛈️'}[playerData.wand.spell] || '✨';
+                wandDiv.innerHTML = `<span class="inventory-item" style="color:#c084fc;">${spellEmoji} Magic Wand (${playerData.wand.spell.toUpperCase()} spell)</span>`;
+            } else {
+                wandDiv.innerHTML = `<span class="inventory-item" style="color:#888;">None</span>`;
+            }
+
+            // Disable wand button if can't afford or already have one
+            const wandBtn = document.getElementById('wandBtn');
+            if (wandBtn) wandBtn.disabled = playerData.coins < 300 || !!playerData.wand;
         }
 
         // Get random weapon from mystery box
@@ -443,6 +472,33 @@
                 log(`NEW WEAPON: ${weapon.name}! (Tier ${weapon.tier}, ${weapon.damage} damage)`, 'success');
             }
 
+            saveData();
+            updateUI();
+        }
+
+        // Buy magic wand
+        function buyWand() {
+            if (playerData.coins < 300) {
+                log('Not enough coins! Need 300.', 'error');
+                return;
+            }
+            if (playerData.wand) {
+                log('You already have a Magic Wand! Use it first.', 'error');
+                return;
+            }
+
+            playerData.coins -= 300;
+            const spells = ['blast', 'freeze', 'fire', 'rain'];
+            const spell = spells[Math.floor(Math.random() * spells.length)];
+            const spellDescs = {
+                blast:  '💥 BLAST — launches the enemy into the wall!',
+                freeze: '❄️ FREEZE — freezes the enemy for 5 seconds!',
+                fire:   '🔥 FIRE RING — ring of fire burns anyone who touches it!',
+                rain:   '⛈️ RAINSTORM — storm clouds electrocute the enemy!',
+            };
+            playerData.wand = { name: 'Magic Wand', damage: 25, type: 'wand', spell: spell, tier: 6 };
+
+            log(`✨ Got a Magic Wand! Spell: ${spellDescs[spell]}`, 'success');
             saveData();
             updateUI();
         }
@@ -581,78 +637,20 @@
         // Initialize UI
         updateUI();
     </script>
+<script src="/disco_logo.js"></script>
 <script>
-// Mini disco ball logo for multiplayer page
+// Mini disco ball logo for multiplayer page (uses shared disco_logo.js)
 (function() {
     const logo = document.getElementById('miniLogo');
     if (!logo) return;
     const c = logo.getContext('2d');
-    const W = logo.width, H = logo.height;
-    const CX = W / 2, BY = 62, BR = 28;
+    const CX = logo.width / 2;  // 40
+    const BY = 62, BR = 28;
     let angle = 0;
-
     function draw() {
-        c.clearRect(0, 0, W, H);
-
-        // String
-        c.strokeStyle = '#aaa'; c.lineWidth = 1.5;
-        c.beginPath(); c.moveTo(CX, 0); c.lineTo(CX, BY - BR); c.stroke();
-
-        // Glow
-        const t = Date.now() / 800;
-        const gr = (Math.sin(t)+1)/2, gg = (Math.sin(t+2)+1)/2, gb = (Math.sin(t+4)+1)/2;
-        const grd = c.createRadialGradient(CX, BY, BR*0.3, CX, BY, BR*2);
-        grd.addColorStop(0, `rgba(${Math.floor(gr*255)},${Math.floor(gg*255)},${Math.floor(gb*255)},0.3)`);
-        grd.addColorStop(1, 'rgba(0,0,0,0)');
-        c.fillStyle = grd;
-        c.beginPath(); c.arc(CX, BY, BR*2, 0, Math.PI*2); c.fill();
-
-        // Ball
-        const bg = c.createRadialGradient(CX-8, BY-8, 2, CX, BY, BR);
-        bg.addColorStop(0, '#fff'); bg.addColorStop(0.3, '#c0c8d8');
-        bg.addColorStop(0.7, '#7080a0'); bg.addColorStop(1, '#303850');
-        c.fillStyle = bg; c.beginPath(); c.arc(CX, BY, BR, 0, Math.PI*2); c.fill();
-
-        // Tiles
-        c.save(); c.beginPath(); c.arc(CX, BY, BR, 0, Math.PI*2); c.clip();
-        const TILE = 6;
-        const cols = Math.ceil(BR*2/TILE)+2, rows = Math.ceil(BR*2/TILE)+2;
-        for (let r = 0; r < rows; r++) {
-            for (let col = 0; col < cols; col++) {
-                const tx = CX-BR-TILE+col*TILE, ty = BY-BR-TILE+r*TILE;
-                const sh = (Math.sin(angle+col*0.8+r*0.6)+1)/2;
-                const hue = (angle*40+col*25+r*35)%360;
-                c.fillStyle = `hsl(${hue},${sh>0.7?60:10}%,${Math.floor((100+sh*155)*0.6)}%)`;
-                c.fillRect(tx+1,ty+1,TILE-2,TILE-2);
-                if (sh>0.85) { c.fillStyle=`rgba(255,255,255,${(sh-0.85)*4})`; c.fillRect(tx+1,ty+1,TILE-2,TILE-2); }
-            }
-        }
-        c.restore();
-
-        // Specular
-        const sp = c.createRadialGradient(CX-9,BY-9,1,CX-6,BY-6,11);
-        sp.addColorStop(0,'rgba(255,255,255,0.9)'); sp.addColorStop(1,'rgba(255,255,255,0)');
-        c.fillStyle=sp; c.beginPath(); c.arc(CX,BY,BR,0,Math.PI*2); c.fill();
-
-        // Yeti (tiny)
-        const YY = BY - BR + 1;
-        c.fillStyle='#e0eaf5';
-        c.beginPath(); c.ellipse(CX,YY-1,12,8,0,Math.PI,0); c.fill();
-        c.beginPath(); c.arc(CX,YY-9,9,0,Math.PI*2); c.fill();
-
-        // Red eyes
-        const eg=(Math.sin(Date.now()/300)+1)/2;
-        c.shadowBlur=4; c.shadowColor='#f00';
-        c.fillStyle=`rgb(${200+Math.floor(eg*55)},0,0)`;
-        c.beginPath(); c.arc(CX-3,YY-10,1.5,0,Math.PI*2); c.fill();
-        c.beginPath(); c.arc(CX+3,YY-10,1.5,0,Math.PI*2); c.fill();
-        c.shadowBlur=0;
-
-        // Fangs
-        c.fillStyle='#fff';
-        c.beginPath(); c.moveTo(CX-2,YY-5); c.lineTo(CX-1,YY-2); c.lineTo(CX,YY-5); c.fill();
-        c.beginPath(); c.moveTo(CX,YY-5); c.lineTo(CX+1,YY-2); c.lineTo(CX+2,YY-5); c.fill();
-
+        c.clearRect(0, 0, logo.width, logo.height);
+        drawDiscoBall(c, CX, BY, BR, angle);
+        drawYeti(c, CX, BY - BR, 0.4);
         angle += 0.04;
         requestAnimationFrame(draw);
     }
